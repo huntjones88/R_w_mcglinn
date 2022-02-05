@@ -1,0 +1,307 @@
+---
+title: "Hmwk 3"
+author: "Hunt Jones"
+date: "2/4/2022"
+output: html_document
+---
+
+## Univariate Assignment
+
+Read in tree data
+
+```{r}
+
+library(ggplot2)
+library(gridExtra)
+library(scatterplot3d)
+library(MASS)
+library(car)
+
+```
+
+```{r}
+# read in directly from website: 
+trees <- read.csv('https://raw.githubusercontent.com/dmcglinn/quant_methods/gh-pages/data/treedata_subset.csv')
+
+str(trees)
+```
+
+Examine this dataset and see how the data is structured, see function 'str' 
+
+The contents of the metadata file (./data/tree_metadata.txt(https://raw.githubusercontent.com/dmcglinn/quant_methods/gh-pages/data/tree_metadata.txt)) is provided here:
+
+
+The dataset includes tree abundances from a subset of a vegetation database of Great Smoky Mountains National Park (TN, NC).
+
+* plotID: unique code for each spatial unit (note some sampled more than once)
+* date: when species occurrence recorded
+* plotsize: size of quadrat in m2
+* spcode: unique 7-letter code for each species
+* species: species name
+* cover: local abundance measured as estimated horizontal cover (ie, relative area of shadow if sun is directly above) classes 1-10 are: 1=trace, 2=0-1%, 3=1-2%, 4=2-5%, 5=5-10%, 6=10-25%, 7=25-50%, 8=50-75%, 9=75-95%, 10=95-100%
+* utme: plot UTM Easting, zone 17 (NAD27 Datum)
+* utmn: plot UTM Northing, zone 17 (NAD27 Datum)
+* elev: elevation in meters from a digital elevation model (10 m res)
+* tci: topographic convergence index, or site "water potential"; measured as the upslope contributing area divided by the tangent of the slope angle (Beven and Kirkby 1979)
+* streamdist: distance of plot from the nearest permanent stream (meters)
+* disturb: plot disturbance history (from a Park report); CORPLOG=corporate logging; SETTLE=concentrated settlement, VIRGIN="high in virgin attributes", LT-SEL=light or selective logging
+* beers: transformed slope aspect ('heat load index'); 0 is SW (hottest), 2 is NE (coolest)
+
+
+
+Above shows a map of the regional and local location of the elevational transects included in the dataset (from Fridley 2009 (http://plantecology.syr.edu/fridley/Fridley2009_jamc.pdf)).
+
+
+1. Carry out an exploratory analysis using the tree dataset. CHECK
+
+Metadata for the tree study can be found here(../data/tree_metadata.txt). 
+
+Specifically, I would like you to develop and compare models for species cover for a habitat
+generalist Acer rubrum
+
+
+and a habitat specialist Abies fraseri 
+
+
+
+Because this dataset includes both continuous and discrete explanatory variables
+use the function Anova in the packages car as such
+
+
+```{r}
+explore <- trees[c( which(trees$species == "Abies fraseri"), which(trees$species == "Acer rubrum")), ]
+abies <- trees[which(trees$species == "Abies fraseri"), ]
+acer <- trees[which(trees$species == "Acer rubrum"), ]
+```
+
+```{r}
+abies$disturb <- as.factor(abies$disturb) # treat disturbance as a factor
+
+abies$disturb <- factor(abies$disturb, levels = c("VIRGIN", "CORPLOG", "LT-SEL", "SETTLE"))
+# this reorders the disturbance factors so that when we run the 'summary' function,
+# CORPLOG, LT-SEL, and SETTLE are each compared to VIRGIN (VIRGIN essentially
+# becomes the null hypothesis.
+
+plot(cover ~ elev, data = abies)
+plot(cover ~ tci, data = abies)
+plot(cover ~ streamdist, data = abies)
+plot(cover ~ beers, data = abies)        # plot each variable independently to 
+plot(cover ~ disturb, data = abies)      # look for signal in graphs
+
+# based on the output of these graphs, prior to making my model, I would expect
+# to see a significant effect of elevation on cover, and another one by distance
+# to the nearest stream, though I would expect the effect of elevation on cover 
+# to be stronger. I expect no significant effect of beers or tci on cover.
+# For the disturbance levels, expect that there might be a significant difference
+# between the VIRGIN and CORPLOG data, but there is such high variance in the 
+# VIRGIN data that the difference may not be statistically significant.
+
+```
+
+```{r}
+abies_mod <- lm(cover ~ elev + tci + streamdist + beers + disturb, data = abies)
+abies_mod   # creates our univariate model with cover as the response, which 
+            # evaluates the effect of each independent variable individually 
+            # and compares it to the others
+```
+
+```{r}
+Anova(abies_mod, type = 3)
+```
+
+```{r}
+summary(abies_mod)
+```
+
+```{r}
+acer$disturb <- as.factor(acer$disturb)
+
+acer$disturb <- factor(acer$disturb, levels = c("VIRGIN", "CORPLOG", "LT-SEL", "SETTLE"))
+
+plot(cover ~ elev, data = acer)
+plot(cover ~ tci, data = acer)
+plot(cover ~ streamdist, data = acer)
+plot(cover ~ beers, data = acer)
+plot(cover ~ disturb, data = acer)
+
+# my expectations for the acer data are quite different than that of Abies fraseri.
+# I expect no significant effect of any of the independent variables included
+# on cover, and I expect to find no significant difference in cover among the
+# samples taken from areas with different disturbance levels.
+
+```
+
+```{r}
+acer_mod <- lm(cover ~ elev + tci + streamdist + beers + disturb, data = acer)
+acer_mod 
+```
+
+```{r}
+Anova(acer_mod, type=3)
+
+```
+
+```{r}
+summary(acer_mod)
+
+```
+
+
+This will estimate partial effect sizes, variance explained, and p-values for 
+each explanatory variable included in the model. 
+
+Compare the p-values you observe using the function 'Anova' to those generated
+using 'summary'. 
+All p-values are the same for both Anova and summary except for that of the 
+disturbance factor. Anova runs one test comparing all disturbance types at once,
+while summary compares each disturbance type to the VIRGIN group, which serves
+as the null hypothesis.
+
+For each species address the following additional questions:
+
+* how well does the exploratory model appear to explain cover?
+    Abies fraseri: the exploratory model indicates that elevation is the best
+    variable to explain cover. Elevation was the only explanatory variable with 
+    a significant relationship to cover. The main reason that this model shows
+    promise, however, is that the r-squared is fairly high, especially for data
+    collected in the field rather than a controlled lab setting. However, the
+    adjusted r-squred value is lower than the r-squared value by about 0.08, 
+    which means that some overfitting has occurred and this model would probably
+    be a better model if it included fewer explanatory variables.
+    
+    Acer rubrum: the exploratory model for acer rubrum does not explain cover
+    very well. While several explanatory variables were found to have a 
+    significant relationship with cover, the r-squared value was very low,
+    meaning that the explanatory variables do not explain much of the variance
+    in the cover data. On top of that, the adjusted r-squared is lower than the
+    r-squared. Although it is only slightly lower, the r-squared value here is
+    so low that even a small decrease might indicate overfitting.
+    
+* which explanatory variables are the most important?
+    the most important explanatory variable in each model appears to be elevation.
+    
+* do model diagnostics indicate any problems with violations of OLS assumptions?
+    
+```{r}
+par(mfrow = c(2,2))
+plot(abies_mod)
+# The data appear to be linear, the residuals are normally distributed. However,
+# homoscedasticity is questionable because the data re not evenly spread. The 
+# data do not appear to be leveraged, as the standardized residuals are within
+# 3 standard deviations, meaning that no outliers exist that might alter the 
+# interpretation of our data, though if I am being honest, I still have a hard 
+# time understanding how to assess this violation.
+
+```
+
+```{r}
+par(mfrow = c(2,2))
+plot(acer_mod)
+
+# The residuals vs fitted appear to indicate that the data is linear, though
+# they are not perfect. The residuals appear to be normally distributed. The 
+# data to not appear to have homoscedasticity. And the data appear to be 
+# levearaged with several outliers.
+
+```
+    
+* are you able to explain variance in one species better than another, 
+  why might this be the case?
+  
+  Yes, we can explain variance in Abies fraseri better. This might be because
+  fewer of this species of tree were observed. Often, when there is a large
+  sample size, significant relationships might be identified despite low 
+  r-squared.
+
+
+
+
+2. You may have noticed that the variable cover is defined as 
+positive integers between 1 and 10. and is therefore better treated
+as a discrete rather than continuous variable. 
+Re-examine your solutions to the question above but from the
+perspective of a General Linear Model (GLM) with a Poisson error term
+(rather than a Gaussian one as in OLS). 
+The Poisson distribution generates integers 0 to positive infinity so this may provide a good first approximation. 
+Your new model calls will look as follows:
+
+```{r}
+acer_poi <- glm(cover ~ elev + tci + streamdist + beers + disturb, data = acer, family = poisson)
+acer_poi
+
+Anova(acer_poi, type=3)
+
+summary(acer_poi)
+```
+
+```{r}
+abies_poi <- glm(cover ~ elev + tci + streamdist + beers + disturb, data = abies, family = poisson)
+abies_poi
+
+Anova(abies_poi, type=3)
+
+summary(abies_poi)
+
+```
+
+For assessing the degree of variation explained you can use a 
+pseudo-R-squared statistic (note this is just one of many possible)
+
+```{r}
+pseudo_r2 = function(glm_mod) {
+                1 -  glm_mod$deviance / glm_mod$null.deviance
+}
+
+pseudo_r2(acer_poi)
+
+pseudo_r2(abies_poi)
+```
+
+Compare your qualatitive assessment of which variables were most important in each model. 
+Does it appear that changing the error distribution changed the results much? In what ways?
+
+Elevation was the most important variable in every model. Changing the error 
+distribution did change the results slightly, but not in a meaningful way, in 
+my opinion. Elevation was still the only variable with a significant relationship
+to cover in the Abies fraseri model, and the variable of significance in the 
+Acer rubrum model were the same in the lm and glm models, though the p-values
+were slightly different. Using the pseudo r-squared value as justification, it
+appears that the glm models were better, but only by a little bit.
+
+3. Provide a plain English summary (i.e., no statistics) of what you have
+found and what conclusions we can take away from your analysis?
+
+What we have found is that elevation appears to be the primary factor of value
+in predicting any effect on cover. For Abies fraseri, using elevation as a 
+predictor of cover will produce fairly reliable results. However, using elevation
+as a predictor of cover for Acer rubrum will not provide very reliable results.
+
+4. (optional) Examine the behavior of the function 'stepAIC()' using the 
+exploratory models developed above. This is a very simple and not very
+robust machine learning stepwise algorithm that uses AIC to select a 
+best model. By default it does a backward selection routine. 
+
+I am still a bit shaky on interpreting AIC results. But, the basics of what I 
+know are that lower AIC's indicate better models. Each of the results here 
+appears to confirm what I found in my lm and glm models earlier, in that elevation
+appears to be the most important variable in the model. The best model for 
+Acer rubrum appears to be a glm model using elevation and tci as the explanatory
+variables, and the best model for Abies fraseri appears to be the same (a glm
+model with tci and elevation as the explanatory variables).
+
+```{r}
+stepAIC(acer_mod)
+stepAIC(acer_poi)
+stepAIC(abies_mod)
+stepAIC(abies_poi)
+
+```
+
+
+
+5. (optional) Develop a model for the number of species in each site 
+(i.e., unique plotID). This variable will also be discrete so the Poisson
+may be a good starting approximation. Side note: the Poisson
+distribution converges asymptotically on the Gaussian distribution as the 
+mean of the distribution increases. Thus Poisson regression does not differ
+much from traditional OLS when means are large. 
