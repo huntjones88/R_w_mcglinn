@@ -1,0 +1,1119 @@
+---
+title: "Univariate Models"
+author: "Hunt Jones"
+date: "1/27/2022"
+output: html_document
+---
+univariate models
+The goals of this lesson are to introduce univariate modeling using simple and multivariate Ordinary Least Squares (OLS) regression, and to gain exposure to the concept and methods of model comparison.
+
+The content from this lesson is modified in part from lessons developed by Jack Weiss and Jason Fridley. The original lessons can be found at the following links:
+
+Weiss 2012
+Fridley 2010
+Readings
+Chapters 5, 9-10 in The R book (1st ed) by Crawley
+Chapters 6 in MASS (4th ed) by Venables and Ripley
+Lesson Outline
+Modeling Philosophy
+Model Building and Graphing
+Understanding Regression via Simulation
+Standardized β
+ coefficients
+# Modeling Philosophy
+One of the simplest and most important ideas when constructing models can be stated succinctly:
+
+“All models are wrong but some models are useful” G.E. Box
+As scientists we have to be on guard that we are not too attached to our models. Additionally it is often difficult to decide when a model is useful or not because there are three general reasons for building a model:
+
+Hypothesis testing
+Exploring data
+Predicting data
+These different goals of model building require different approaches and modes of model evaluation. Hypothesis testing is typically geared towards testing a small handful of carefully crafted A PRIORI hypotheses. In this context they model is typically judged useful if it is statistically significant.
+However, many times though the investigator does not have a clear a priori hypothesis (see post at Small Pond Science) and is instead examining if a large number of possibly relevant variables are correlated with a response of interest. The goal of this kind of exploratory analysis is to generate hypotheses that can be more carefully tested with other datasets and not with the dataset used to generate them. Unfortunately very frequently and quite misleadingly the correlations that are found to be strong in the exploratory analysis are then presented in a hypo-deductive framework as if they were a prori (see post on Dynamic Ecology). When using models to make predictions we are typically less concerned about the exact variables that are in the model and more concerned that we can predict observations not included in the building of the model (i.e., cross-validate the model).
+
+There are many reasons that p-values and statistical significance are abused in science. For example, it can be very tempting to report statistics of significance in many analyses in which you did not have clear a prori hypotheses because often times R will report such statistics without prompting from the user (e.g., summary(my_ols_model)). Additionally there is a stigma in many fields of science against exploratory analyses in favor of hypothesis testing which pushes some researchers to re-frame their analyses as if they are confirmatory rather than exploratory. And of course there is pressure during peer-review to only report on statistics that are significant.
+
+You might be wondering why this is a big deal. The reason is that you will inevitably get good fitting models (high R^2) and statistically significant results (p < 0.05) if you keep adding variables to a model even if those variables by definition are independent of the response variable. (Freedman 1983).
+
+The Principle of Parsimony (Occam’s Razor)
+The principle of parsimony can be stated succinctly as:
+
+the correct explanation is the simplest explanation.
+In the context of model building, all else being equal the better model is the model with the following properties (Crawley, 2007):
+
+a model with n−1 parameters to a model with n parameters;
+a model with k−1 explanatory variables to a model with k explanatory variables;
+a linear model to a model which is curved;
+a model without a hump to a model with a hump;
+a model without interactions to a model containing interactions between factors.
+Thus model simplification is an important part of finding the most useful model. A simpler model that explains similar levels of deviance in a response should be considered a better model.
+
+Crawley (2007) suggests the following steps for backward model simplification:
+
+
+These steps are reasonable if one is carrying out an exploratory data analysis; however, I do not recommend this approach when formal hypothesis testing is the goal of the analysis due to Freedman’s paradox as explained above. Additionally, it may be worth pointing out that model building can proceed from simple to more complex models as well evaluating with each additional term if it has significantly increased explanatory power.
+
+We will begin exploring how to build and interpret linear models in R by using a data set that a researcher collected 40 plants of common milkweed, Asclepias syriaca, from old fields in northeastern Maine and grew them in a greenhouse; 20 received fertilizer and the other 20 were kept as controls. After two months, she measured the height of each plant and then collected and weighed all of the fruit produced by the plant.
+
+For today’s purposes we will examine how fruit mass responses to fertilization, and plant height, and if fertilization modulates the effect of plant height on fruit mass.
+
+First let’s read load the relevant R packages and the data in and look at the structure of the data
+
+```{r}
+install.packages("ggplot2")       # for ggplot
+install.packages("gridExtra")     # for grid.arrange to arrange ggplots
+install.packages("scatterplot3d") # for scatterplot3d to make 3d graphic
+install.packages("MASS")          # for stepAIC to automate model selection 
+
+library(ggplot2)
+library(gridExtra)
+library(scatterplot3d)
+library(MASS)
+
+weeds <- read.csv('http://dmcglinn.github.io/quant_methods/data/milkweeds.csv')
+weeds
+```
+
+##    samp_id          trt plant_ht_cm fruit_mass_mg
+## 1        1   fertilized       30.32         19.17
+## 2        2 unfertilized       23.07         15.06
+## 3        3   fertilized       21.90         16.09
+## 4        4 unfertilized       32.32         17.19
+## 5        5 unfertilized       30.19         15.88
+## 6        6   fertilized       19.63         18.91
+## 7        7 unfertilized       15.32         13.43
+## 8        8   fertilized       25.26         15.54
+## 9        9   fertilized       25.42         22.90
+## 10      10   fertilized       22.33         15.97
+## 11      11   fertilized       36.81         24.80
+## 12      12 unfertilized       23.76         17.18
+## 13      13   fertilized       22.75         22.00
+## 14      14   fertilized       32.29         19.31
+## 15      15 unfertilized       29.27         16.14
+## 16      16   fertilized       24.16         17.06
+## 17      17 unfertilized       22.62         15.04
+## 18      18 unfertilized       18.97         16.70
+## 19      19   fertilized       25.32         20.15
+## 20      20 unfertilized       27.58         17.97
+## 21      21 unfertilized       17.92         16.09
+## 22      22 unfertilized       25.08         16.71
+## 23      23   fertilized       28.38         19.68
+## 24      24   fertilized       30.80         21.19
+## 25      25 unfertilized       27.11         18.46
+## 26      26 unfertilized       16.63         13.35
+## 27      27   fertilized       28.26         24.34
+## 28      28   fertilized       37.67         23.41
+## 29      29 unfertilized       25.11         20.72
+## 30      30 unfertilized       21.72         12.61
+## 31      31   fertilized       25.10         22.23
+## 32      32   fertilized       31.17         16.74
+## 33      33   fertilized       21.08         19.69
+## 34      34 unfertilized       26.69         17.69
+## 35      35   fertilized       26.04         20.89
+## 36      36 unfertilized       32.68         19.59
+## 37      37 unfertilized       31.71         18.29
+## 38      38 unfertilized       30.93         19.17
+## 39      39 unfertilized       29.05         16.92
+## 40      40   fertilized       31.95         21.93
+So we can see that this data set is fairly simple. There are two treatments in the column called trt: fertilized and unfertilized. And there are two continuous variables plant height is provided by plant_ht_cm and fruit mass by fruit_mass_mg.
+
+Before we dive into the models it is always important to first visually examine the patterns in the data set graphically. This will help to build our intuition which will guide our modeling and interpretation of the statistics.
+
+A quick note on graphics. I will primarily use base graphics in this course but increasingly the R community is moving towards using ggplot for graphics. ggplot is a really great set of tools for making bueatiful graphics but it can be more difficult to understand exactly how it works and how to custumize graphics. Therefore, I want to expose you to both methods of producing graphics the simple and clunky base graphics and the elegent and shiny ggplot graphics.
+First let’s examine the effect that fertilizer has on fruit mass using box-and-whisker plots.
+```{r}
+boxplot(fruit_mass_mg ~ trt, data = weeds, xlab='Treatment', 
+        ylab = 'Fruit mass (mg)')
+```
+
+Above we used the function boxplot to produce a modified box-and-whisker plot. In this case we used the formula argument to specify the relationship we wished to display in which the LHS is the dependent variable and the RHS is the independent variable. The argument data tells the function where to look for the variables that I specified in the formula argument. Lastly, xlab and ylab allow you to specify the labels for each axis.
+
+In the graphic, the box represents the inner quartile range (IQR), the line is the median, and the whiskers represents either the minimum or maximum or 1.5 * IQR which ever is closer to the median value. Outliers are defined as points that fall outside of the whiskers and will be shown as points.
+
+I prefer box-and-whisker plots because they help to represent the data in a summarized way that does not make distributional assumptions. It is also easy to calculate the values used in the boxplot using the function quantile
+```{r}
+quantile(weeds$fruit_mass_mg[weeds$trt == 'fertilized'])
+```
+##      0%     25%     50%     75%    100% 
+## 15.5400 18.4475 19.9200 22.0575 24.8000
+Now let’s make the same graphic using ggplot
+```{r}
+ggplot(data = weeds) + 
+  geom_boxplot(mapping = aes(x = trt, y = fruit_mass_mg)) +  
+  labs(x = 'Treatment', y = 'Fruit mass (mg)') 
+```
+
+Technically this is the same graphic as produced by base but you can see that the R code is a bit more cryptic.
+
+Let’s break it down line by line: ggplot(data = weeds) + spawns a ggplot graphic and specifies that the data will be provided by the object weeds. Now we can simply refer to column names of weeds in the remainder of the plotting call.
+
+The next line: geom_boxplot(mapping = aes(x = trt, y = fruit_mass_mg)) + specifies the geometry of the graphic in this case a boxplot, there are many other that can be specified in ggplot. The geometry function requires a few arguments including how to map data on to the graphic using the argument mapping. The mapping is usually wrapped in the function aes which provides an aesthetically pleasing rendering of the data on the graphic, aes requires and x and y variables.
+
+The last line: labs(x = 'Treatment', y = 'Fruit mass (mg)') provides the axis labels.
+
+Note that each line that is not the last line of the ggplot function ends with a plus sign + this tells R that you are specifying more options to the plot.
+
+The additional overhead of the understanding this somewhat cryptic R code comes when you want to quickly make nice graphics across multiple factors or splits or a data set and when you want more complex geometries which the ggplot developers have already created.
+
+We are only going to touch on the capacities of ggplot here. Here are a couple of great places to learn more about ggplot
+
+https://ggplot2.tidyverse.org/
+R for Data Science by Garrett Grolemund and Hadley Wickham
+From our boxplot we can see that fertilizer does seem to increase the mass of the milkweed fruits. Let’s also examine if plant height seems to influence fruit mass.
+
+Since fruit mass and plant height are both continuous variables we will use a scatterplot to display their relationship.
+```{r}
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, xlab = 'Plant height (cm)',
+     ylab = 'Fruit mass (mg)')
+```
+
+Like the boxplot function the plot function allows you to use a formula argument to specify the variables included in the plot.
+
+From our plot we can see that taller plants do seem to produce more fruit mass.
+
+Let’s visually examine if fertilizer modifies how fruit mass response to plant height
+```{r}
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, type = 'n', 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "fertilized",
+       pch = 1, col = 'red')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "unfertilized",
+       pch = 2, col = 'blue')
+legend('topleft', c('Fertilized', 'Unfertilized'), col = c('red', 'blue'), 
+       pch = c(1, 2), bty = 'n')
+```
+
+Now we have a graphic where we have different colors and symbols for the fertilized and unfertilized points.
+
+Let’s add a smoother so that we can better see if the different fertilization regimes have different functional forms. There are many options for smoothing functions to choose from in R but for simplicity we’ll use the function lowess which is a locally-weighted polynomial regression.
+```{r}
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, type = 'n', 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "fertilized",
+       pch = 1, col = 'red')
+lines(lowess(weeds$plant_ht_cm[weeds$trt == 'fertilized'],
+             weeds$fruit_mass_mg[weeds$trt == 'fertilized']),
+      lty = 1, col = 'red')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "unfertilized",
+       pch = 2, col = 'blue')
+lines(lowess(weeds$plant_ht_cm[weeds$trt == 'unfertilized'],
+             weeds$fruit_mass_mg[weeds$trt == 'unfertilized']),
+      lty = 2, col = 'blue')
+legend('topleft', c('Fertilized', 'Unfertilized'), col = c('red', 'blue'), 
+       pch = c(1, 2), lty = c(1, 2), bty = 'n')
+```
+
+Question
+
+Based on the graphic above does it appear that fertilization modulates the effect of plant height on fruit mass? In statistics we would consider such an effect and interaction effect.
+
+  Yes, it does appear that fertilization modulates the effect of fruit mass on
+  plant height. fertilized plants of equal height have larger mass than un-
+  fertilized plants. 
+
+[Show answer]
+Let’s create the same graphic but using ggplot
+```{r}
+ggplot(data = weeds, mapping = aes(x = plant_ht_cm, y = fruit_mass_mg)) + 
+  geom_point(mapping = aes(color = trt)) +
+  geom_smooth(mapping = aes(linetype = trt, color = trt), method = 'loess') +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_classic()
+```
+
+A few quick points about this ggplot call.
+
+rather than specify the mapping of the x and y for each geom_* we simply specify them once when setting up the graphic in the first ggplot() call
+Note the usage of manual_color() - this is generally note needed as ggplot‘s default colors are usually pretty attractive. I’m not sure why the packages is showing ’blue’ as ‘purple’
+Excercise
+
+Modify the ggplot call so that the x and y axes are properly labeled.
+[Show answer]
+
+```{r}
+ggplot(data = weeds, mapping = aes(x = plant_ht_cm, y = fruit_mass_mg)) + 
+  geom_point(mapping = aes(color = trt)) +
+  geom_smooth(mapping = aes(linetype = trt, color = trt), method = 'loess') +
+  scale_color_manual(values = c("red", "blue")) +
+  labs(x = 'Plant Height (cm)', y = 'Fruit Mass (mg)') +
+  theme_classic()
+```
+
+# Model Building and Graphing
+Now that we’ve visually explored the relationships in the milkweed data set, and we have developed some intuition about how we might want to approach this data set let’s actually develop some statistical regression models to explain the variation in fruit mass.
+
+Ordinary Least Squares Regression
+Ordinary Least Squares (OLS) regression is one of the most commonly used models in statistics. It attempts to approximate the response variable y using a linear combination of explanatory variables x. We can express OLS regression algebraically as:
+
+yi=β01+β1xi1+⋯+βpxip+εi,i=1,…,n,ε∼N(0,σ2)(equ. 1)
+
+Let’s break equ. 1 down into its parts:
+
+yi
+ is the i-th value of the response variable
+β0
+ is the y-intercept
+the β
+ values are the partial slopes of the p explanatory variables.
+ε
+ represents the normally distributed error with mean of 0 and variance equal to σ2
+One of the core things to take away from equ. 1 is that regression equations always have one or more error terms. How this error is specified (e.g., Normal error, Binomial error, Poisson error) is the key way different regression methods differ from one another. Another important point about the error term is that in OLS each of the n samples are assumed to be independent and identically distributed (iid) from one another. Other methods of regression we look examine (e.g., spatial regression) will not make this same assumption and will specify how samples co-vary with one another.
+
+Taken together it can be seen that OLS regression has a number of key assumptions
+
+Linearity such that y is a linear combination of the x-variables. Because the x variables may be transformed this is a less restrictive assumption then it may seem.
+No error in the independent variables.
+Homoscedasticity of errors which means that error around the regression line is equal across the range of x values.
+Independence of errors such that the direction and magnitude of error is not correlated between samples.
+As you read those assumptions you may be correctly thinking to yourself that those assumptions are almost never met in most situations. We’ll examine in a moment using simulated data how critical violations of some of those assumptions are.
+
+Check out this nice interactive visualization of OLS regression at Explained Visually
+
+Model Heirarchy
+In our greenhouse data set we have several different models we could examine:
+
+Intercept only null model
+
+There is the minimal intercept only model
+
+y=β0+ε
+This model essentially just uses the mean of y as a predictor of y. This may seem silly but this is essentially what you compare all more complex models against.
+```{r}
+null_mod = lm(fruit_mass_mg ~ 1, data = weeds)
+null_mod
+```
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ 1, data = weeds)
+## 
+## Coefficients:
+## (Intercept)  
+##        18.4
+```{r}
+mean(weeds$fruit_mass_mg)
+```
+## [1] 18.40475
+In the above R code, lm specifies this is a linear model, we used the formula specification just as we did when using boxplot and plot but in this case the RHS of the equation is just a 1 indicating that just an intercept only model is being specified.
+
+It is clear from the output of the R code this model only has the intercept and that is equal to the mean of the response variable.
+
+Let’s examine this model graphically
+```{r}
+plot(fruit_mass_mg ~ 1, data = weeds)
+abline(null_mod, lwd = 2)
+abline(h = mean(weeds$fruit_mass_mg), col = 'red', lty = 2, lwd = 2)
+```
+
+Note above that the x-axis is just an index of the 40 samples. The function abline is useful to specifying regression (reg=), horizontal (h=), and vertical lines (v=).
+
+Main effect models
+
+A main effect model is a model that includes at least one independent variable:
+
+y=β0+β1x+ε
+
+We can develop single main effect models that include either treatment or plant height as such in R:
+```{r}
+trt_mod = lm(fruit_mass_mg ~ trt, data = weeds)
+```
+# alternatively we can just update null_mod
+```{r}
+trt_mod = update(null_mod, . ~ . + trt)
+ht_mod = update(null_mod, . ~ . + plant_ht_cm)
+trt_mod
+ht_mod
+```
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt, data = weeds)
+## 
+## Coefficients:
+##     (Intercept)  trtunfertilized  
+##           20.10            -3.39
+
+ht_mod
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ plant_ht_cm, data = weeds)
+## 
+## Coefficients:
+## (Intercept)  plant_ht_cm  
+##     10.1205       0.3143
+Let’s take a closer look at the trt_mod which includes the main effect due to treatment. Note that only one of the levels of treatment is provided as a coefficient. In this case it is unfertilized. To better understand this you need to consider how factor variables are included in regression models. A categorical variable is encoded in R into a set of orthogonal contrasts.
+
+```{r}
+weeds$trt <- as.factor(weeds$trt)
+
+levels(weeds$trt)
+
+```
+## [1] "fertilized"   "unfertilized"
+
+```{r}
+contrasts(weeds$trt)
+```
+##              unfertilized
+## fertilized              0
+## unfertilized            1
+In this case we have a factor trt that only has two levels so it only requires one binary variable because if a sample is not fertilized then it must be unfertilized. That may seem a little strange but just remember that if you have a factor with k levels then you need k - 1 binary variables to specify that factor as a set of orthogonal contrasts. This explains why the treatment variable only requires a single regression coefficient.
+
+Sometimes we have factors that are ranked such as low, medium, high. In this case the variable is called ordinal as opposed to our nomial treatment variable. The contrasts of ordinal variables are not as simple to specify and typically a Helmert polynomial contrasts are used.
+
+Let’s examine these models graphically.
+```{r}
+par(mfrow=c(1,2))
+plot(fruit_mass_mg ~ trt, data = weeds, xlab = 'Treatment',ylab = 'Fruit mass (mg)')
+abline(trt_mod)
+
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+abline(ht_mod)
+```
+
+The first panel of this graphic doesn’t quite look correct because the regression line is not intersecting the center of the boxplots which is what we would expect. This is because by default R assigns the first level of the treatment factor an x-value of 1 and the second level of the factor a value of 2. Therefore when the regression line is added to the plot it is plotting the y-intercept (which is the mean value of the fertilized group) off the graph to the left one unit. To correct this we have to build the graph from scratch a bit more carefully making sure that the fertilized group is plotted an an x-axis value of 0 so that the regression line intersects that groups properly.
+```{r}
+par(mfrow=c(1,2))
+plot(0:1, 0:1, type='n', ylim = range(weeds$fruit_mass_mg), axes = F,
+     xlim = c(-0.25, 1.25),
+     xlab = 'Treatment', ylab = 'Fruit mass (mg)', frame.plot = T)
+points(rep(0, 20), weeds$fruit_mass_mg[weeds$trt == 'fertilized'])
+points(rep(1, 20), weeds$fruit_mass_mg[weeds$trt == 'unfertilized'])
+axis(side = 1, at = 0:1, labels = c('fertilized', 'unfertilized'))
+axis(side = 2)
+abline(trt_mod)
+
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+abline(ht_mod)
+```
+
+This is a good example of how ggplot can simplify things if you know the correct command. In this case the command is a bit cryptic we need to specify in the mapping of the points that the argument group = 1. To be honest I’m not exactly sure what this means but a search of the internet suggested it would work so viola!
+```{r}
+p1 <- ggplot(data = weeds,
+             mapping = aes(x = trt, y = fruit_mass_mg, group = 1)) + 
+      geom_point() + 
+      geom_smooth(method = 'lm') +
+      labs(x = 'Treatment', y = 'Fruit mass (mg)')
+
+p2 <- ggplot(data = weeds, 
+             mapping = aes(x = plant_ht_cm, y = fruit_mass_mg)) + 
+      geom_point() + 
+      geom_smooth(method = 'lm') + 
+      labs(x = 'Plant height (cm)', y = 'Fruit mass (mg)')
+
+grid.arrange(p1, p2, nrow = 1)
+```
+
+Note above that the function grid.arrange is used to make multi-panel ggplots and it is a part of the gridExtra package.
+
+All main effects model
+
+Of course we can also specify a model that includes both main effects
+
+y=β0+β1x+β2z+ε
+
+In R we would use:
+```{r}
+main_mod = lm(fruit_mass_mg ~ trt + plant_ht_cm, data = weeds)
+main_mod
+```
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt + plant_ht_cm, data = weeds)
+## 
+## Coefficients:
+##     (Intercept)  trtunfertilized      plant_ht_cm  
+##         12.9586          -2.8822           0.2613
+This particular model specifies two parallel regression lines that only differ in their y-intercept based on whether or not they were fertilized.
+```{r}
+xrange = range(weeds$plant_ht_cm)
+
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, type = 'n', 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "fertilized",
+       pch = 1, col = 'red')
+# add the fitted regression line using two points at either end of the range of x 
+lines(xrange, 
+      predict(main_mod, 
+              newdata = data.frame(plant_ht_cm = xrange, trt = "fertilized")),
+      col = 'red', lty = 1)
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "unfertilized",
+       pch = 2, col = 'blue')
+lines(xrange, 
+      predict(main_mod, 
+              newdata = data.frame(plant_ht_cm = xrange, trt = "unfertilized")),
+      col = 'blue', lty = 2)
+legend('topleft', c('Fertilized', 'Unfertilized'), col = c('red', 'blue'), 
+       pch = c(1, 2), lty = c(1, 2), bty = 'n')
+```
+
+
+Above in the R code we used a new function predict(). This function is useful for taking a fitted model and using it to predict values. In this case we use this feature to predict where two points fall along the x-axis so that we can connect them with lines and thus form the fitted regression lines. One of the more difficult arguments to predict() to understand is the newdata argument. This is essentially a data.frame that must have the variables in the model included as column names. So in this case must have the variables plant_ht_cm and trt in newdata.
+
+Another way to think about this model is that it is specifying a 3d plane that can fit through the data.
+```{r}
+s3d <- scatterplot3d(weeds[ , c('trt', 'plant_ht_cm', 'fruit_mass_mg')], 
+                     type = 'h', color = 'blue', angle = 65, pch = 16, 
+                     lab = c(3, 5), xlim = c(0, 3),
+                     x.ticklabs = c('', 'fertilized', 'unfertilized', ''), 
+                     box = F) 
+# Add regression plane
+s3d$plane3d(main_mod)
+```
+
+Again above it is a little fussy to make this graph because of the factor.
+
+Interaction effect model
+
+Lastly the most complex typical model that we would specify based on our graphical exploration would also be a model that includes an interaction effect. An interaction effect is an effect in which one variable influences the effect of another variable on the response.
+
+y=β0+β1x+β2z+β3xz+ε
+```{r}
+int_mod = lm(fruit_mass_mg ~ trt + plant_ht_cm + trt:plant_ht_cm,
+              data = weeds)
+# alternatively we can use * as short hand
+int_mod = lm(fruit_mass_mg ~ trt * plant_ht_cm, data = weeds)
+int_mod
+```
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt * plant_ht_cm, data = weeds)
+## 
+## Coefficients:
+##                 (Intercept)              trtunfertilized  
+##                   12.842466                    -2.669054  
+##                 plant_ht_cm  trtunfertilized:plant_ht_cm  
+##                    0.265532                    -0.008069
+Graphically the easiest way to consider this model is that it specifies separate regression lines for each level of fertilization that differ in both their y-intercept and slope.
+```{r}
+plot(fruit_mass_mg ~ plant_ht_cm, data = weeds, type = 'n', 
+     xlab = 'Plant height (cm)', ylab = 'Fruit mass (mg)')
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "fertilized",
+       pch = 1, col = 'red')
+xrange = range(weeds$plant_ht_cm[weeds$trt == "fertilized"])
+lines(xrange, 
+      predict(int_mod, 
+              newdata = data.frame(plant_ht_cm = xrange, trt = "fertilized")),
+      col = 'red', lty = 1)
+points(fruit_mass_mg ~ plant_ht_cm, data = weeds, subset = trt == "unfertilized",
+       pch = 2, col = 'blue')
+xrange = range(weeds$plant_ht_cm[weeds$trt == "unfertilized"])
+lines(xrange, 
+      predict(int_mod, 
+              newdata = data.frame(plant_ht_cm = xrange, trt = "unfertilized")),
+      col = 'blue', lty = 2)
+legend('topleft', c('Fertilized', 'Unfertilized'), col = c('red', 'blue'), 
+       pch = c(1, 2), lty = c(1, 2), bty = 'n')
+```
+
+Excercise
+
+Try to come up with the ggplot code to graphically depict the interaction effect model (clue: we made essentially this graphic above but with a smoother so if you need a reminder of how to structure the code look above).
+
+[Show answer]
+
+
+Question
+
+In the above graphic do you see good evidence that the additional complexity of the interaction effect model is warranted?
+
+[Show answer]
+Tabular model interpretation
+Now that we’ve build our two models let’s examine the model fits and the statistical significance of the explanatory variables.
+
+summary(trt_mod)
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt, data = weeds)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -4.5600 -1.3049  0.0252  1.7704  4.7000 
+## 
+## Coefficients:
+##                 Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)      20.1000     0.5557  36.171  < 2e-16 ***
+## trtunfertilized  -3.3905     0.7859  -4.314  0.00011 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 2.485 on 38 degrees of freedom
+## Multiple R-squared:  0.3288, Adjusted R-squared:  0.3111 
+## F-statistic: 18.61 on 1 and 38 DF,  p-value: 0.0001099
+# becasue trt is a factor lets also examien the anova output
+anova(trt_mod)
+## Analysis of Variance Table
+## 
+## Response: fruit_mass_mg
+##           Df Sum Sq Mean Sq F value    Pr(>F)    
+## trt        1 114.95 114.955  18.614 0.0001099 ***
+## Residuals 38 234.68   6.176                      
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+The function summary provides several useful pieces of information for linear models. The coefficients table:
+
+Coefficients:
+                Estimate Std. Error t value Pr(>|t|)    
+(Intercept)      20.1000     0.5557  36.171  < 2e-16 ***
+trtunfertilized  -3.3905     0.7859  -4.314  0.00011 ***  
+which provides the estimate, standard error, t-statistic, and p-value for:
+
+β0^
+ the y-intercept - 1st row of the table
+β1^
+ the slope of the regression line - 2nd row of the table
+The p-values can be used to assess statistical significance, and the t-statistics provide a measure of effect size.
+
+Note: most of the time we are not interested in the test of the intercept
+
+In addition to the coefficient table several statistics for the entire model are also provided:
+
+Residual standard error: 2.485 on 38 degrees of freedom
+Multiple R-squared:  0.3288,    Adjusted R-squared:  0.3111 
+F-statistic: 18.61 on 1 and 38 DF,  p-value: 0.0001099
+The multiple R-squared and adjusted R-squared provide estimates of variance explained. The later statistic adjusts for the number of variables included in the model. The F-statistic is a ratio of the mean sum of squares for the model to the sum of squares of the residuals (i.e., the ratio of explained variance to unexplained variance). The p-value associated with the F-statistic provides a means of examining the statistics significance of the entire model.
+
+Note: in this specific model because only a single explanatory variable is included the overall model p-value is identical to the p-value reported for trt in the coefficients table.
+
+The function anova reports the analysis of variance table
+
+Response: fruit_mass_mg
+          Df Sum Sq Mean Sq F value    Pr(>F)    
+trt        1 114.95 114.955  18.614 0.0001099 ***
+Residuals 38 234.68   6.176
+The first column lists the degrees of freedom which indicate that our for two leveled factor trt that only one degree of freedom is lost. An additional degree of freedom is lost to estimate the variance of the error term, thus the residuals Df = 38 when n = 40. The second column provides the sums of square differences for the trt and residuals these are also know as the explain and unexplained variances. The F-value is the ratio of unexplained to explained variance after taking degrees of freedom into consideration.
+
+# F is explained SS / (unexplained SS / df)
+114.95 / (234.68 / 38)
+## [1] 18.613
+Note that the p-value derived from the F-test is identical to the t reported for in the coefficient table returned by summary.
+
+So the tabular output of the treatment main effect model indicates that including just treatment explains 31% of the variance which is a statistically significant amount of variance.
+
+Now let’s examine the plant height main effect model
+
+Question
+
+Extract and interpret the model statistics for the plant height only model.
+
+[Show answer]
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ plant_ht_cm, data = weeds)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -4.3367 -1.8466 -0.6624  1.8441  5.3379 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) 10.12052    2.09707   4.826 2.28e-05 ***
+## plant_ht_cm  0.31428    0.07808   4.025 0.000262 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 2.54 on 38 degrees of freedom
+## Multiple R-squared:  0.2989, Adjusted R-squared:  0.2804 
+## F-statistic:  16.2 on 1 and 38 DF,  p-value: 0.0002623
+# variance explained is 30% and overall model is statistically significant
+# this suggests that the treatment effect is stronger than the plant height effect
+# Model comparisons
+Our graphical exploration suggested that the model that included both treatment and plant height would have the most support let’s undertake some formal model comparison.
+
+Adjusted R2
+A simple but somewhat cumbersome approach is just to compare the model output from summary
+
+summary(main_mod)
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt + plant_ht_cm, data = weeds)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -4.3628 -1.3944  0.3798  1.1516  4.0827 
+## 
+## Coefficients:
+##                 Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)     12.95862    1.86798   6.937 3.44e-08 ***
+## trtunfertilized -2.88217    0.68014  -4.238 0.000144 ***
+## plant_ht_cm      0.26128    0.06612   3.951 0.000336 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 2.112 on 37 degrees of freedom
+## Multiple R-squared:  0.528,  Adjusted R-squared:  0.5025 
+## F-statistic: 20.69 on 2 and 37 DF,  p-value: 9.297e-07
+summary(int_mod)
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt * plant_ht_cm, data = weeds)
+## 
+## Residuals:
+##    Min     1Q Median     3Q    Max 
+## -4.379 -1.371  0.367  1.162  4.082 
+## 
+## Coefficients:
+##                              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)                 12.842466   2.705632   4.747 3.25e-05 ***
+## trtunfertilized             -2.669054   3.612254  -0.739  0.46476    
+## plant_ht_cm                  0.265532   0.097429   2.725  0.00985 ** 
+## trtunfertilized:plant_ht_cm -0.008069   0.134256  -0.060  0.95241    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 2.141 on 36 degrees of freedom
+## Multiple R-squared:  0.528,  Adjusted R-squared:  0.4887 
+## F-statistic: 13.42 on 3 and 36 DF,  p-value: 4.907e-06
+From this we can see that two models have identical R2
+ values which usually would be surprising because we typically expect more complex models to have higher raw variance explained estimates. This isn’t surprising to use because we already graphically inspected the models and concluded there was little support for an interaction effect. We should also compare the adjusted R2
+ which adjusts the estimate of variance explained based on how much we would expect the variance explained if purely noise variables were added. In this case the more complex interaction effect model has a lower adjust R2
+ suggesting that it is not the most parsimonious model.
+
+Log-ratio tests
+We can also use the function anova to carry out log-ratio tests on nested models. Nested models are models in which the more complex model has all of the same parameters as the simple model and then some additional ones.
+
+anova(main_mod, int_mod)
+## Analysis of Variance Table
+## 
+## Model 1: fruit_mass_mg ~ trt + plant_ht_cm
+## Model 2: fruit_mass_mg ~ trt * plant_ht_cm
+##   Res.Df    RSS Df Sum of Sq      F Pr(>F)
+## 1     37 165.04                           
+## 2     36 165.02  1  0.016559 0.0036 0.9524
+The ANOVA table indicates that the interaction model does not explain significantly more variance - this case this was a silly test to run because we already could have predicted this result based on the adjusted R2
+ values.
+
+AIC model comparison
+In the biological sciences a popular way of comparing models is to use a penalized log likelihood criteria such as as the Akaike information criterion (AIC) or the Bayesian information criterion (BIC). Unlike the ANOVA comparisons AIC and BIC can be used to compare models that are not nested. The formula for AIC is:
+
+AIC=−2log(L̂)+2k
+
+where L̂
+ is the likelihood of the model and k
+ is the number of parameters in the model. The AIC index ranks models both on their degree of fit but also on their complexity. A small value of AIC indicates a better model and thus models with more complexity (i.e., more parameters) and thus larger k
+ value, but equal likelihood are considered worse models (higher AIC).
+
+Note: the exact value of the AIC model is not important but the differences between models are
+
+# examine the AIC scores of all the models we have considered
+# smaller number is better
+AIC(null_mod)
+## [1] 204.2357
+AIC(trt_mod)
+## [1] 190.2891
+AIC(ht_mod)
+## [1] 192.0322
+AIC(main_mod)
+## [1] 178.2068
+AIC(int_mod)
+## [1] 180.2027
+So as you can see all the models are better than the null model, but the main effect only model is considered the best model. If two models are within 2 units of the AIC index then they are considered roughly equivalent models.
+
+There is another function called extractAIC which returns different values for AIC because it uses different additive constants; however, the differences between the models are still the same
+
+AIC(main_mod)
+## [1] 178.2068
+extractAIC(main_mod)[2]
+## [1] 62.69167
+AIC(main_mod) - AIC(int_mod)
+## [1] -1.995986
+extractAIC(main_mod)[2] - extractAIC(int_mod)[2]
+## [1] -1.995986
+Automated model selection
+The approach we have taken above of a careful examination of the graphical patterns in the data set followed by careful and rational model comparison is not always possible when the models being compared are quite large.
+
+# run a stepwise regerssion analysis on the full model.
+stepAIC(int_mod)
+## Start:  AIC=64.69
+## fruit_mass_mg ~ trt * plant_ht_cm
+## 
+##                   Df Sum of Sq    RSS    AIC
+## - trt:plant_ht_cm  1  0.016559 165.04 62.692
+## <none>                         165.02 64.688
+## 
+## Step:  AIC=62.69
+## fruit_mass_mg ~ trt + plant_ht_cm
+## 
+##               Df Sum of Sq    RSS    AIC
+## <none>                     165.04 62.692
+## - plant_ht_cm  1    69.644 234.68 74.774
+## - trt          1    80.098 245.13 76.517
+## 
+## Call:
+## lm(formula = fruit_mass_mg ~ trt + plant_ht_cm, data = weeds)
+## 
+## Coefficients:
+##     (Intercept)  trtunfertilized      plant_ht_cm  
+##         12.9586          -2.8822           0.2613
+As you can see above this approach results in the same model that we found to be the best the main effects model. Do note that stepAIC internally uses the function extracAIC to compute the AIC values.
+
+Model diagonstics
+Now that we think we have a sufficient model we should carefully examine it to make sure it meets the assumptions of OLS regression. This is particularly important if we are going to use the p-values for rigorous hypothesis testing.
+
+It is easy to examine the diagnostics of the model visually using plot
+
+par(mfrow = c(2,2))
+plot(int_mod)
+
+
+The top left and bottom left panels both suggests that the assumption of homoscadisticity holds. The top right panel suggests that the residuals are normally distributed. The bottom right panel suggests that there are not large outliers that are having a disproportionate effect on the regression.
+
+# Understanding Regression via Simulation
+R is an excellent environment for learning about how models work in part because of the ease to generate data with known properties. This provides us the ability to not only check that a model is performing as expected but also helps to indicate strengths and weaknesses of various model fitting and effect size strength measures.
+
+#generate data for example
+set.seed(10) # this is done so that the same results are generated each time
+x1 = runif(900)
+x2 = rbinom(900, 10, .5)
+x3 = rgamma(900, .1, .1)
+
+#organize predictors in data frame
+sim_data = data.frame(x1, x2, x3)
+#create noise b/c there is always error in real life
+epsilon = rnorm(900, 0, 3)
+#generate response: additive model plus noise, intercept=0
+sim_data$y = 2*x1 + x2 + 3*x3 + epsilon
+Above we have defined response variable y as a linear function of the three simulated independent variables (the x variables). Epsilon refers to the error in the model and in line with OLS regression assumptions we have made this is a normally distributed variable centered at zero.
+
+Now that we have simulated our data let’s examine how we build OLS models in R and plot the result.
+
+#First we will demonstrate the simplest possible model 
+#the intercept only model
+mod = lm(sim_data$y ~ 1)
+mod 
+## 
+## Call:
+## lm(formula = sim_data$y ~ 1)
+## 
+## Coefficients:
+## (Intercept)  
+##       8.581
+summary(mod)
+## 
+## Call:
+## lm(formula = sim_data$y ~ 1)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -12.743  -4.282  -1.764   1.581  88.528 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)   8.5809     0.2863   29.97   <2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 8.59 on 899 degrees of freedom
+#Note that the estimate for the intercept is equilalent to the mean of y
+mean(sim_data$y)
+## [1] 8.58092
+#simple linear regression with x1 as predictor
+mod1 = lm(y ~ x1, data=sim_data)
+#plot regression line and mean line
+plot(y ~ x1, data=sim_data)
+abline(h=mean(sim_data$y), col='pink', lwd=3)
+abline(mod1, lty=2)
+
+
+#simple linear regression with x3 as a predictor
+mod3 = lm(y ~ x3, data=sim_data)
+#graph regression line and mean line
+plot(y ~ x3, data=sim_data)
+abline(mod3)
+abline(h=mean(sim_data$y), col='pink', lwd=2)
+legend('topleft', c('OLS fit', 'mean'), col=c('black', 'pink'), lty=1, lwd=c(1,2))
+
+
+Now that we’ve build our two models let’s examine the model fits and the statistical significance of the explanatory variables.
+
+summary(mod1)
+## 
+## Call:
+## lm(formula = y ~ x1, data = sim_data)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -12.334  -4.164  -1.744   1.511  88.076 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)   8.0261     0.5752  13.954   <2e-16 ***
+## x1            1.0967     0.9862   1.112    0.266    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 8.589 on 898 degrees of freedom
+## Multiple R-squared:  0.001375,   Adjusted R-squared:  0.0002632 
+## F-statistic: 1.237 on 1 and 898 DF,  p-value: 0.2664
+We noticed that there was a large outlier in the previous plot. Let’s run model diagnostics to see if we should consider dropping that variable.
+
+par(mfrow=c(2,2))
+plot(mod1)
+
+
+par(mfrow=c(1,1))
+From the diagnostic plots you can see observations 26, 85, and 88 are consistently identified as having abnormally large residual values (Residuals vs Fitted plot), they cause the residuals to diverge from an expectation under normality (Normal Q-Q plot), and lastly they exert too much leverage (i.e., control on the slope of the regression, Residuals vs Leverage plot).
+
+Here is a case where if this was an actual analysis we would check to make sure these values are not mistakes. Let’s drop these points and examine the changes in the model statistics.
+
+sim_data_sub = sim_data[-c(26, 85, 88), ]
+#verify that one observation was removed
+dim(sim_data)
+## [1] 900   4
+dim(sim_data_sub)
+## [1] 897   4
+#refit model to reduced data
+mod3_sub = lm(y ~ x3, data=sim_data_sub)
+summary(mod3)
+## 
+## Call:
+## lm(formula = y ~ x3, data = sim_data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -10.1071  -2.2041  -0.0316   2.2882  12.1010 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)  5.94151    0.12502   47.52   <2e-16 ***
+## x3           2.97661    0.04511   65.99   <2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 3.554 on 898 degrees of freedom
+## Multiple R-squared:  0.8291, Adjusted R-squared:  0.8289 
+## F-statistic:  4355 on 1 and 898 DF,  p-value: < 2.2e-16
+summary(mod3_sub)
+## 
+## Call:
+## lm(formula = y ~ x3, data = sim_data_sub)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -10.1068  -2.2200  -0.0314   2.2866  12.1012 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)  5.94127    0.12534   47.40   <2e-16 ***
+## x3           2.97747    0.04517   65.91   <2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 3.557 on 895 degrees of freedom
+## Multiple R-squared:  0.8292, Adjusted R-squared:  0.829 
+## F-statistic:  4345 on 1 and 895 DF,  p-value: < 2.2e-16
+So it appears that R2
+ is highly sensitive to outliers but the β
+ coefficients are more robust.
+
+Excercise
+
+Create a single plot that displays the model of y given x3 before and after the outliers were removed. How much to they visually differ from one another. Modify the arguments to abline() including lty and lwd.
+
+[Show answer]
+
+
+# Multiple regression
+So far we have only examined models with a single variable but by design we know that y is influenced by three variables. Let’s include all the relevant explanatory variables in one model now.
+
+mod_main = lm(y ~ x1 + x2 + x3, data=sim_data)
+summary(mod_main)
+## 
+## Call:
+## lm(formula = y ~ x1 + x2 + x3, data = sim_data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -10.5652  -1.9274  -0.0122   1.9385  11.1587 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) -0.12607    0.38847  -0.325    0.746    
+## x1           2.03852    0.35835   5.689 1.73e-08 ***
+## x2           1.01568    0.06629  15.323  < 2e-16 ***
+## x3           2.99037    0.03961  75.500  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 3.118 on 896 degrees of freedom
+## Multiple R-squared:  0.8687, Adjusted R-squared:  0.8682 
+## F-statistic:  1976 on 3 and 896 DF,  p-value: < 2.2e-16
+coefficients(mod_main)
+## (Intercept)          x1          x2          x3 
+##   -0.126067    2.038523    1.015678    2.990369
+Notice that in the output above the coefficient estimates are close to what we set them at when we created the variable y.
+
+# Standardized β
+ coefficients
+A standardized β
+ or regression coefficient is simply the β
+ estimate from a regression on standardized variables. The typical way of standardizing a variable is to subtract its mean and divide it by its standard deviation. This transformation results in a variable a mean of zero and a standard deviation of one. There are other ways to standardize a variable but this is by far the most common.
+
+One reason for standardizing variables is that you can interpret the β
+ estimates as partial correlation coefficients. In other words now that the variables are standardized you can compare how correlated they are to the response variable using their regression coefficients. Below is a demo of this.
+
+## We will use this function to plot the data and correlations 
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor=3, ...)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y))
+    txt <- format(c(r, 0.123456789), digits = digits)[1]
+    txt <- paste0(prefix, txt)
+    if(missing(cex.cor)) 
+        cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor)
+}
+Before standardizing variables it is worthwhile to highlight that the relationship between correlation and regression statistics. Specifically, the t-statistic from a simple correlation coefficient is exactly what is reported for the β1
+ coefficient in a regression model.
+
+cor.test(sim_data$y, sim_data$x1)$statistic
+##        t 
+## 1.112078
+summary(lm(y ~ x1, data=sim_data))$coef
+##             Estimate Std. Error   t value     Pr(>|t|)
+## (Intercept) 8.026145  0.5751750 13.954265 3.371653e-40
+## x1          1.096749  0.9862159  1.112078 2.664021e-01
+The β
+ coefficient reported by the regression is not equal to the correlation coefficient though because the β
+ is in the units of the x1
+ variable (i.e., it has not been standardized). Now let’s use the function scale() to standardize the independent and dependent variables.
+
+sim_data_std = data.frame(scale(sim_data))
+
+mod = lm(y  ~ x1 + x2 + x3, data=sim_data)
+mod_std = lm(y  ~ x1 + x2 + x3, data=sim_data_std)
+round(summary(mod)$coef, 3)
+##             Estimate Std. Error t value Pr(>|t|)
+## (Intercept)   -0.126      0.388  -0.325    0.746
+## x1             2.039      0.358   5.689    0.000
+## x2             1.016      0.066  15.323    0.000
+## x3             2.990      0.040  75.500    0.000
+round(summary(mod_std)$coef, 3)
+##             Estimate Std. Error t value Pr(>|t|)
+## (Intercept)    0.000      0.012   0.000        1
+## x1             0.069      0.012   5.689        0
+## x2             0.186      0.012  15.323        0
+## x3             0.915      0.012  75.500        0
+cor(sim_data$y, sim_data$x1)
+## [1] 0.03708501
+cor(sim_data$y, sim_data$x2)
+## [1] 0.1791775
+cor(sim_data$y, sim_data$x3)
+## [1] 0.9105223
+Notice that above the t-statistics and consequently the p-values between mod and mod_std don’t change (with the exception of the intercept term which is always 0 in a regression of standardized variables). This is because the t-statistic is a pivotal statistic meaning that its value doesn’t depend on the scale of the difference.
+
+Additionally notice that the individual correlation coefficients are very similar to the β
+ estimates in mod_std. Why are these not exactly the same? Here’s a hint - what would happen if their was strong multicollinarity between the explanatory variables?
+
+Let’s plot the variables against one another and also display their individual Pearson correlation coefficients to get a visual perspective on the problem
+
+pairs(sim_data, lower.panel = panel.smooth, upper.panel = panel.cor)
+
+
+# Interaction effects
+# you can build the model by writing out every interaction
+lm(y ~ x1 + x2 + x3 + x1*x2 + x1*x3 + x2*x3 + x1*x2*x3, data=sim_data)
+## 
+## Call:
+## lm(formula = y ~ x1 + x2 + x3 + x1 * x2 + x1 * x3 + x2 * x3 + 
+##     x1 * x2 * x3, data = sim_data)
+## 
+## Coefficients:
+## (Intercept)           x1           x2           x3        x1:x2  
+##   -0.327927     2.464966     1.053227     3.025460    -0.079541  
+##       x1:x3        x2:x3     x1:x2:x3  
+##   -0.070953    -0.004132     0.008253
+# or you can simply update the main effects model
+mod_full = update(mod_main, ~ . + x1*x2*x3)
+summary(mod_full)
+## 
+## Call:
+## lm(formula = y ~ x1 + x2 + x3 + x1:x2 + x1:x3 + x2:x3 + x1:x2:x3, 
+##     data = sim_data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -10.5068  -1.9316   0.0055   1.9421  11.1881 
+## 
+## Coefficients:
+##              Estimate Std. Error t value Pr(>|t|)    
+## (Intercept) -0.327927   0.692906  -0.473   0.6361    
+## x1           2.464966   1.238039   1.991   0.0468 *  
+## x2           1.053227   0.134821   7.812 1.58e-14 ***
+## x3           3.025460   0.220906  13.696  < 2e-16 ***
+## x1:x2       -0.079541   0.240723  -0.330   0.7412    
+## x1:x3       -0.070953   0.387355  -0.183   0.8547    
+## x2:x3       -0.004132   0.044000  -0.094   0.9252    
+## x1:x2:x3     0.008253   0.081042   0.102   0.9189    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 3.125 on 892 degrees of freedom
+## Multiple R-squared:  0.8687, Adjusted R-squared:  0.8677 
+## F-statistic: 843.2 on 7 and 892 DF,  p-value: < 2.2e-16
+Model comparison
+# we can carry out a nested model comparison
+anova(mod_main, mod_full)
+## Analysis of Variance Table
+## 
+## Model 1: y ~ x1 + x2 + x3
+## Model 2: y ~ x1 + x2 + x3 + x1:x2 + x1:x3 + x2:x3 + x1:x2:x3
+##   Res.Df    RSS Df Sum of Sq      F Pr(>F)
+## 1    896 8710.7                           
+## 2    892 8708.8  4    1.8915 0.0484 0.9956
+# examine the AIC scores of the two models, smaller number is better
+AIC(mod_full)
+## [1] 4614.814
+AIC(mod_main)
+## [1] 4607.009
+# run a stepwise regerssion analysis on the full model.
+stepAIC(mod_full)
+## Start:  AIC=2058.72
+## y ~ x1 + x2 + x3 + x1:x2 + x1:x3 + x2:x3 + x1:x2:x3
+## 
+##            Df Sum of Sq    RSS    AIC
+## - x1:x2:x3  1   0.10124 8708.9 2056.7
+## <none>                  8708.8 2058.7
+## 
+## Step:  AIC=2056.74
+## y ~ x1 + x2 + x3 + x1:x2 + x1:x3 + x2:x3
+## 
+##         Df Sum of Sq    RSS    AIC
+## - x2:x3  1   0.00415 8708.9 2054.7
+## - x1:x3  1   0.86156 8709.8 2054.8
+## - x1:x2  1   0.96545 8709.9 2054.8
+## <none>               8708.9 2056.7
+## 
+## Step:  AIC=2054.74
+## y ~ x1 + x2 + x3 + x1:x2 + x1:x3
+## 
+##         Df Sum of Sq    RSS    AIC
+## - x1:x3  1   0.85892 8709.8 2052.8
+## - x1:x2  1   0.96173 8709.9 2052.8
+## <none>               8708.9 2054.7
+## 
+## Step:  AIC=2052.82
+## y ~ x1 + x2 + x3 + x1:x2
+## 
+##         Df Sum of Sq   RSS    AIC
+## - x1:x2  1         1  8711 2050.9
+## <none>                8710 2052.8
+## - x3     1     55339 64049 3846.5
+## 
+## Step:  AIC=2050.92
+## y ~ x1 + x2 + x3
+## 
+##        Df Sum of Sq   RSS    AIC
+## <none>               8711 2050.9
+## - x1    1       315  9025 2080.9
+## - x2    1      2282 10993 2258.4
+## - x3    1     55417 64127 3845.6
+## 
+## Call:
+## lm(formula = y ~ x1 + x2 + x3, data = sim_data)
+## 
+## Coefficients:
+## (Intercept)           x1           x2           x3  
+##     -0.1261       2.0385       1.0157       2.9904
