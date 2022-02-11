@@ -1,0 +1,150 @@
+---
+title: "HW 4 - Multivariate"
+author: "Hunt Jones"
+date: "2/10/2022"
+output: html_document
+---
+---
+layout: page
+title: multivariate models
+---
+
+For this assignment will be analyzing data on the Vegetation
+and Environment in Dutch Dune Meadows.
+
+To import the data and read the metadata run the following:
+
+```{r}
+library(vegan)
+data(dune)
+data(dune.env)
+?dune
+?dune.env
+```
+
+1. Conduct an indirect ordination on the dune plant community. Specifically,
+visually examine a NMDS plot using the bray-curtis distance metric. Below is 
+some code to help you develop a potential plot that emphasizes the role of the
+environmental variable "Moisture". Describe how you interpret the
+graphic. What is the goal of creating such a plot? Does this analysis suggest
+any interesting findings with respect to the dune vegetation?
+
+    ```{r}
+    dune_mds <- metaMDS(dune, distance = "bray")
+    
+    dune.env$Moisture <- as.numeric(dune.env$Moisture)
+    
+    
+    plot(dune_mds, type='n')
+    text(dune_mds, 'sp', cex=.5)
+    # generate vector of colors 
+    color_vect = rev(terrain.colors(6))[-1]
+    points(dune_mds, 'sites', pch=19, 
+           col=color_vect[dune.env$Moisture])
+    legend('topright', paste("Moisture =", 1:5, sep=''), 
+           col=color_vect, pch=19)
+    
+    # Based on this graph, it appears that sites that are more similar to one 
+    # another tend to have the same moisture, where dryer sites are similar to 
+    # other dry sites and wetter sites are similar to other wet sites. What this
+    # means is that the plant community is largely determined by moisture.
+    ```
+    
+    
+```{r}
+
+stressplot(dune_mds, main = "Shepherd Plot")
+
+gof=goodness(dune_mds)
+plot(dune_mds, type="t", main="Goodness of Fit")
+points(dune_mds, display="sites", cex=gof*200, col=color_vect[dune.env$Moisture])
+```
+
+2. Carry out a direct ordination using CCA in order to test any potential 
+hypotheses that you developed after examining the MDS plot. Specifically,
+carry out a test of the entire model (i.e., including all constrained axes)
+and also carry out tests at the scale of individual explanatory variables
+you included in your model if you included more than one variable. Plot your 
+results.
+
+```{r}
+library(vegan)
+dune_cca <- cca(dune)
+dune_cca
+summary(dune_cca)
+summary(dune_cca, scaling=1)   # CCA using entire model.
+```
+
+```{r}
+evplot <- function(x) {
+  par(mfrow=c(2,1))
+  barplot(x, main="Eigenvalues", col="bisque", las=2)
+  abline(h=mean(x), col="red")
+  legend("topright", "Average Eigenvalue", lwd=1, col=2, bty="n")
+}
+brkstk <- function(x) {
+  n <- length(x)
+  bsm <- data.frame(j=seq(1:n), p=0)
+  bsm$p[1] <- 2/n
+  for(i in 2:n) {
+    bsm$p[i]=bsm$p[i-1] + (1/(n+1-i))
+  }
+  bsm$p <- 200*bsm$p/n
+  bsm
+  par(mfrow=c(2,1))
+  barplot(t(cbind(200*x/sum(x), bsm$p[n:1])), beside=TRUE, main="% variance", col=c("bisque",2), las=2)
+  legend("topright", c("% eigenvalue", "broken stick model"), pch=15, col=c("bisque", 2), bty="n")
+}
+
+```
+
+```{r}
+(ev2 <- dune_cca$CA$eig)
+evplot(ev2)
+brkstk(ev2)
+```
+
+```{r}
+par(mfrow=c(1,2))
+plot(dune_cca, scaling=2, main="CA plant sites - biplot scaling two")
+dune_cca_env <- envfit(dune_cca, dune.env)
+plot(dune_cca_env) # Generates plot indicating importance of each variable.
+                   # It is pretty clear that Moisture is the most important
+                   # by looking at this plot, however there is a LOT of noise.
+```
+
+```{r}
+dune_cca2 <- cca(dune ~ ., dune.env)
+
+plot(dune_cca2)
+
+cca_dune_stepfwd <- ordistep(cca(dune~1, data=dune.env), scope=formula(dune_cca2), directions="forward", pstep=1000) # This cca model indicates, similar to the above, that moisture
+            # is the variable that best explains the similarity of sites to one
+            # another. However, this model goes on to suggest that Management is
+            # also important; a finding that was not obvious (at least to myself)
+            # thus far. Now to build a parsimonious model, we will incorporate
+            # only Moisture and Management.
+
+```
+
+```{r}
+(pars_dune_cca <- cca(dune ~ Moisture + Management, data=dune.env))
+# Interestingly, this parsimonious model includes only 4 constrained axes, which
+# is the number of CCA axes that was suggested to be included by the Average
+# Eigenvalue and broken stick model graphs above.
+anova.cca(pars_dune_cca, step=1000)
+anova.cca(pars_dune_cca, step=1000, by="axis")
+
+vif.cca(dune_cca2)
+vif.cca(pars_dune_cca)
+```
+
+
+3. Do your two analyses agree with one another or complement one another or do
+these two analyses seem to be suggesting different take home messages? Which
+analysis do you find to be more useful?
+
+These analyses appear to complement one another. Both suggest that Moisture has
+the largest effect on site similarity out of all variables available. I suppose
+NMDS seemed more straightforward/easy to read. However, CCA, once interpreted
+correctly yields more information.
