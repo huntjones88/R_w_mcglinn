@@ -1,0 +1,298 @@
+---
+title: "Spatial Models HW"
+author: "Hunt Jones"
+date: "2/22/2022"
+output: html_document
+---
+---
+layout: page
+---
+
+## Spatial Modeling Assignment
+
+```{r}
+library(vegan)
+
+
+data(BCI)
+## UTM Coordinates (in metres)
+BCI_xy = data.frame(x = rep(seq(625754, 626654, by=100), each=5), 
+                    y = rep(seq(1011569,  1011969, by=100), len=50))
+```
+
+1) Examine if there is evidence of spatial dependence in a rare and a common
+species in the BCI tree dataset
+
+  Based on the graphs of geographic distance and distance in abundance of 
+  individuals of Cassipourea guianensis and Symphonia globulifera below, it 
+  appears that rare species are spatially independent and common species are 
+  spatially dependent. However, only one species was tested each time. When I 
+  reran my code using a different common species and a 
+  different rare species, the results suggested that both were spatially 
+  independent, and when I ran the code again using a third rare species, the 
+  results suggested that its distribution was not spatially 
+  independent. Therefore, the evidence suggests that both rare and common 
+  species can have spatial dependence, but that spatial dependence can be 
+  determined on a species by species basis, and cannot be generalized to all 
+  rare or all common species.
+  Mantel test and corellogram support my conclusion based on the graphs of 
+  distance in abundance and population size for Cassipourea guianensi and 
+  Symphonia globulifera. C. guianensis does not have spatial dependence, while
+  S. globulifera does.
+
+```{r}
+plot(BCI_xy)
+
+sp_abund <- colSums(BCI)
+hist(sp_abund)
+hist(log10(sp_abund)) # log transformation for normal distribution
+quantile(sp_abund)
+quantile(log10(sp_abund))
+which(sp_abund >25 & sp_abund < 27)
+which(sp_abund > 10^1.93 & sp_abund < 10^1.95)
+
+rare <- BCI[ , 190]
+common <- BCI[ , 32]
+
+plot(BCI_xy, cex = rare/max(rare))
+plot(BCI_xy, cex = common/max(common))
+
+geod <- dist(BCI_xy)
+rared <- dist(rare)
+commd <- dist(common)
+
+maxdist <- max(geod)/2
+
+par(mfrow=c(1,2))
+plot(geod, rared, main = 'rare spp')
+lines(lowess(geod, rared), lw=2, col='red')
+plot(geod, commd, main = 'common spp')
+lines(lowess(geod, commd), lw=2, col='red')
+
+
+# run mantel test and corellogram 
+
+rare_mantel <- mantel(rared, geod)
+rare_mantel
+
+common_mantel <- mantel(commd, geod)
+common_mantel
+
+rare_corlgrm <- mantel.correlog(rared, geod)
+
+common_corlgrm <- mantel.correlog(commd, geod)
+
+
+par(mfrow=c(1,2))
+plot(rare_corlgrm)
+mtext(side=3, 'Rare Species')
+abline(v = maxdist, col='red', lwd=3, lty=2)
+plot(common_corlgrm)
+mtext(side=3, 'Common Species')
+abline(v = maxdist, col='red', lwd=3, lty=2)
+
+
+```
+
+
+2) Build two generalized linear models to predict the abundance of the species
+*Drypetes standleyi* using the abundance of other tree species in the study site.
+Specifically examine the following species as predictor variables:
+
+
+```{r}
+sp_ids = c("Cordia.lasiocalyx", "Hirtella.triandra",
+           "Picramnia.latifolia", "Quassia.amara",
+           "Tabernaemontana.arborea", "Trattinnickia.aspera", 
+           "Xylopia.macrantha")
+
+```
+
+```{r}
+library(nlme)
+
+pred_sp <- BCI[ , sp_ids]
+
+resp_sp <- BCI[ , 'Drypetes.standleyi']
+
+sp_dat <- data.frame(pred_sp, resp_sp, BCI_xy)
+
+pred_sp_log <- log10(pred_sp+1)
+
+resp_sp_log <- log10(resp_sp+1)
+
+sp_dat_log <- data.frame(pred_sp_log, resp_sp_log, BCI_xy)
+
+sp_mod1 <- gls(resp_sp ~ Xylopia.macrantha, data=sp_dat)
+summary(sp_mod1)
+
+sp_mod2 <- gls(resp_sp ~ . -(x+y), data=sp_dat)
+summary(sp_mod2)
+
+sp_mod2_log <- gls(resp_sp_log ~ . -(x+y), data=sp_dat_log)
+summary(sp_mod2)
+
+```
+Note renaming the species ids to something a little easier to work with like
+"sp_a", "sp_b" will make model construction a little less cumbersome
+
+* Model 1: only include a single species as a predictor variable
+  
+
+* Model 2: include all of the species as predictor variables
+
+  Model 1, with only one species as a predictor, shows strong spatial 
+  correlation. The semivariogram first reaches 1.0 at a distance somewhere 
+  between 450 to 500, and there appears to be a nugget at about 0.3. However, 
+  Model 2, with all species included as predictors, does not appear to show 
+  spatial correlation. Using a different spatial correlation structure might yield
+  different results for model 2. Of note, the semivariogram in model 2 does not
+  appear to fit the data as well as in model 1. While the semivariogram in model
+  2 did not reach 1, there are data at or slightly above 1, beginning at distance
+  of about 410, and based on visual inspection, there is a nugget at about 0.7.
+  
+```{r}
+plot(Variogram(sp_mod1, form = ~x+y))
+
+plot(Variogram(sp_mod2, form = ~x+y))
+
+plot(Variogram(sp_mod2_log, form = ~x+y))
+
+```
+
+With both models examine the spatial dependence of the residuals using the 
+function `Variogram`. Model the spatial dependence in the residuals using one
+of the error structures available. 
+  
+
+```{r}
+sp_mod1_spher <- update(sp_mod1,
+corr=corSpher(c(475,0.3), form = ~x+y, nugget=T))
+summary(sp_mod1_spher)
+
+sp_mod1_exp <- update(sp_mod1,
+corr=corExp(form = ~ x+y))
+summary(sp_mod1_exp)
+
+sp_mod1_exp_nug <- update(sp_mod1, corr=corExp(form = ~ x+y, nugget=0.3))
+summary(sp_mod1_exp_nug)
+
+plot(Variogram(sp_mod1_spher, resType = "n"))
+
+plot(Variogram(sp_mod1_exp, resType = "n"))
+
+anova(sp_mod1, sp_mod1_spher, sp_mod1_exp, sp_mod1_exp_nug)
+
+```
+
+
+```{r}
+sp_mod2 <- gls(resp_sp ~ Cordia.lasiocalyx+Hirtella.triandra+Picramnia.latifolia+Quassia.amara+Tabernaemontana.arborea+Trattinnickia.aspera+Xylopia.macrantha, data = sp_dat)
+summary(sp_mod2)
+
+sp_mod2_spher <- update(sp_mod2, corr=corSpher(c(410, 0.7), form =~x+y, nugget=T))
+summary(sp_mod2_spher)
+
+sp_mod2_exp <- update(sp_mod2, corr=corExp(form =~x+y, nugget=T))
+summary(sp_mod2_exp)
+
+plot(Variogram(sp_mod2_spher, form = ~x+y))
+
+plot(Variogram(sp_mod2_exp, form = ~x+y, maxDist=maxdist))
+
+plot(sp_mod2,resid( ., type="n")~fitted(.),abline=0)
+
+qqnorm(sp_mod2,~resid(.,type="n"))
+```
+
+```{r}
+sp_mod2_log <- gls(resp_sp_log ~ Cordia.lasiocalyx+Hirtella.triandra+Picramnia.latifolia+Quassia.amara+Tabernaemontana.arborea+Trattinnickia.aspera+Xylopia.macrantha, data = sp_dat_log)
+summary(sp_mod2_log)
+
+sp_mod2_spher_log <- update(sp_mod2_log, corr=corSpher(c(410, 0.7), form =~x+y, nugget=T))
+summary(sp_mod2_spher_log)
+
+sp_mod2_exp_log <- update(sp_mod2_log, corr=corExp(form =~x+y))
+summary(sp_mod2_exp_log)
+
+sp_mod2_rat_log <- update(sp_mod2_log, corr=corRatio(form = ~x+y))
+summary(sp_mod2_rat_log)
+
+sp_mod2_rat_log_nug <- update(sp_mod2_log, corr=corRatio(form = ~x+y, nugget=T))
+summary(sp_mod2_rat_log_nug)
+
+plot(Variogram(sp_mod2_spher_log, form = ~x+y))
+
+plot(Variogram(sp_mod2_exp_log, form = ~x+y, maxDist=maxdist))
+
+plot(Variogram(sp_mod2_rat_log, maxDist = maxdist))
+
+plot(Variogram(sp_mod2_rat_log_nug, maxDist = maxdist))
+
+plot(Variogram(sp_mod2_rat_log_nug, resType="n", maxDist = maxdist))
+
+plot(sp_mod2_log,resid( ., type="n")~fitted(.),abline=0)
+
+qqnorm(sp_mod2_log,~resid(.,type="n"))
+
+anova(sp_mod2_log, sp_mod2_exp_log, sp_mod2_spher_log, sp_mod2_rat_log, sp_mod2_rat_log_nug)
+```
+
+* Did including the spatial error term have a large impact on the coefficients
+of the model?
+
+  Yes, including the spatial error term increased the coefficients in both models.
+  The coefficient more than doubled for both spatial structures used in the first 
+  model, though there was not a difference between results of models including
+  different spatial structures. 
+  In the second model, there was an increase in all models with spatial error 
+  terms, but the greatest increase was in the rational model with a nugget.
+
+* Did including the spatial error terms significantly improve model fit (use 
+function `anova` to carry out model comparison)?
+
+  Model 1 appeared to be very spatially dependent, while model 2 did not. Using
+  spherical or exponential spatial structuring provided significant improvement
+  to model 1 compared to one with no spatial structuring, though neither
+  spherical or exponential structuring was signifcantly better than the other.
+  
+  Model 2 did not appear to be spatially dependent based on visual inspection.
+  I played around with some spatial structures, and while there was statistically
+  significant improvement with spherical or exponential structuring compared
+  to the model with no spatial structure, the improvement was less than that
+  of Model 1, and the results of both spherical and exponential structuring were
+  identical in Model 2. 
+  When I mapped out the residuals in model 2, it turned out that they were not
+  normally distributed, which prompted me to log transform the data. This greatly
+  improved the model, though did not change my visual interpretation of spatial 
+  dependence within the model. Under the log-transformed model, the original 
+  variogram still showed little visual evidence of spatial dependence, though 
+  there was statistical evidence that including spatial structuring in the model 
+  significantly improved the model. I tried 4 different models; rational, 
+  exponential, spherical, and rational with nugget. The best model was one with 
+  rational spatial structure with the nugget included.
+
+
+* Explain why you did or did not observe a difference in the influence of adding 
+the spatial error term between the two models.
+
+  There was a difference in the influence of adding the spatial error term between
+  the two models. The most likely reason for this is that the species included
+  as predictors have different biology and might each be influenced by different
+  kinds of spatial structuring. For example, it is possible that no single species
+  included lacks spatial dependence. However, the kind of spatial dependence that
+  each one is influenced by might be different. Species that are predators are
+  more likely to be spatially structured by internal factors such as competition, 
+  while other species may be structured strongly by environmental factors. Thus,
+  some species could be influenced strongly by induced spatial dependence, while
+  others are autocorrelated. Therefore, our model examining one species as a 
+  predictor variable may be more strongly influenced by spatial structuring because
+  it is more likely that only one kind spatial influence is present, which
+  makes it easier to detect, and therefore easier to correct against. In the model
+  with many species, different kinds of spatial influences may be causing an effect,
+  and on top of that, each species included may have a different influence
+  on the likelihood of our response species being present.
+  
+  
+  
+  

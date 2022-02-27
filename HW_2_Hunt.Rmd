@@ -168,7 +168,7 @@ vect_y <- function(a) {
   y <- 0
   for(i in a) {
     y <- y+i
-    print(y)
+    
     
   }
 }
@@ -177,7 +177,8 @@ ronda <- c(1:5)
 micky <- c(1:7)
 vect_y(micky)
 
-vect_y(ronda)
+as <- vect_y(ronda)
+
 ```
 
 (Optional)Fibonacci numbers and Golden ratio

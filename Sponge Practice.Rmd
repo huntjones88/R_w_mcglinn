@@ -1,0 +1,35 @@
+---
+title: "Sponge Practice"
+author: "Hunt Jones"
+date: "2/16/2022"
+output: html_document
+---
+```{r}
+library(MASS)
+library(carData)
+library(car)
+
+practice_dat$Species <- as.factor(practice_dat$Species)
+ad_sponge_modC <- lm(Atm_13C~Species, data=practice_dat)
+
+ad_sponge_modN <- lm(Atm_15N~Species, data=practice_dat)
+
+
+
+aov(ad_sponge_modC)
+TukeyHSD(aov(ad_sponge_modC))
+
+aov(ad_sponge_modN)
+TukeyHSD(aov(ad_sponge_modN))
+
+plot(Atm_13C~Species, data=practice_dat)
+plot(Atm_15N~Species, data=practice_dat)
+
+
+# Verongula rigida, Aplysina cauliformis, and Mycale laevis
+# Vrig and Acau are both HMA, Mlae is LMA.
+
+qqnorm(practice_dat$Atm_13C)
+qqnorm(practice_dat$Atm_15N)
+
+```

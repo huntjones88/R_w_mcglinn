@@ -1,0 +1,519 @@
+---
+title: "Spatial Models Lesson"
+author: "Hunt Jones"
+date: "2/22/2022"
+output: html_document
+---
+Spatial Models
+The goals of this lesson are to introduce how spatial dependence detected and modeled for uni- and multi-variate response variables. Although in this lesson we focus on spatial dependence the core concepts of how to detect and model a lack of independence in samples may be applied to dependence due to: time, relatedness, position on a genome, and many other study specific driver variables.
+
+Readings
+The R Book p778-785 on Generalized Least Squares models with spatially correlated errors
+Numerical Ecology in R, p228-238 on detecting spatial dependence.
+https://beckmw.wordpress.com/2013/01/07/breaking-the-rules-with-spatial-correlation/
+Outline
+Spatial autocorrelation and induced spatial dependence
+Detecting a spatial signal
+Univariate modeling
+Multivariate modeling
+Spatial autocorrelation and induced spatial dependence
+There are two general reasons why spatial dependence may exist in a response variable.
+
+autocorrelation - the variable is spatially non-random due its own internal dynamics. In ecology this is sometimes referred to as a false gradient. An example of this is when offspring have limited dispersal from their natal site and therefore finding one organism increases the likelihood of finding another.
+
+induced spatial dependence: the variable is not inherently spatially structured but the driving factors that it responds to are. In ecology this is sometimes referred to as a true gradient. An example of this phenomena would be if an organism's physiology is driven by temperature if temperature is non-randomly spatially structured then the organism should also display non-random patterns of occurrence.
+
+There is no statistical way to distinguish false from true gradients.
+
+Detecting a spatial signal
+We are going to use data on the occurrence of Oribatid mites collected from 70 soil cores across a field to examine how to detect non-random spatial signals for both univariate and multi-variate response variables. Specifically, we will examine a vector of species richness (i.e., number of species in a site), and a matrix of species composition (i.e., a community abundance matrix):
+```{r}
+library(vegan)
+## Loading required package: permute
+## Loading required package: lattice
+## This is vegan 2.5-6
+library(nlme)
+# Oribatid mite data. 70 soil cores collected by Daniel Borcard in 1989.
+# See Borcard et al. (1992, 1994) for details.
+```
+
+```{r}
+data(mite)
+data(mite.env)
+data(mite.xy)
+?mite
+plot(mite.xy)
+
+
+sr <- rowSums(mite > 0)
+hist(sr)
+
+
+plot(mite.xy, cex = sr/max(sr))
+```
+
+col_brks <- hist(sr, plot=F)$breaks
+col_indices <- as.numeric(cut(sr, col_brks))
+cols <- rev(terrain.colors(length(col_brks)))
+plot(mite.xy, cex=2, pch=19, col=cols[col_indices])
+
+
+Visually it appears that low richness sites (i.e., brown circles) are more likely to be near other low richness sites - this indicates a pattern of spatial dependence. We can carry out some very simple analyses to examine if this relationship is stronger than we would expect under a null model of randomly shuffled spatial positions. Our test statistic in this context is the Pearson correlation coefficient between the difference in the response variable (i.e., richness) and the difference in spatial proximity.
+
+# calculate Euclidean distance between richness and spatial coordinates
+sr_dist <- dist(sr)
+xy_dist <- dist(mite.xy)
+For interpretation purposes a rule of thumb is not to interpret distances great than 1/2 the maximum distance in the dataset. This is to avoid examining spatial patterns that are underlaid by only a few samples. At small to intermediate distances there are typically many more pairs of samples where as at the extreme ends of a sampling grid there are only two sets of samples (i.e., those that lie along the two diagonals corners from one another)
+
+max_dist <- max(xy_dist) / 2
+
+# plot result
+plot(xy_dist, sr_dist)
+abline(lm(sr_dist ~ xy_dist), lwd=3, col='red')
+lines(lowess(xy_dist, sr_dist), lwd=3, col='pink')
+abline(v = max_dist, col='red', lwd=3, lty=2)
+
+
+# compute correlation
+obs_cor <- cor(xy_dist, sr_dist)
+obs_cor
+## [1] 0.366253
+Question
+
+Based on the graphic above does it appear that values of species richness are more similar or more different the further apart they are in space?
+
+[Show answer]
+Question
+
+What would a random spatial signal look like on this graph?
+
+[Show answer]
+We can better examine if our intuition is correct by randomizing the location of each sample and re-making our graphic and re-estimating the correlation coefficient.
+
+# randomize the rows of the spatial coordinates matrix
+?sample
+null_xy <- mite.xy[sample(nrow(mite.xy)), ]
+null_dist <- dist(null_xy)
+
+plot(null_dist, sr_dist)
+abline(lm(sr_dist ~ null_dist), lwd=3, col='red')
+lines(lowess(null_dist, sr_dist), lwd=3, col='pink')
+abline(v = max_dist, col='red', lwd=3, lty=2)
+
+
+# compute null correlation
+null_cor = cor(null_dist, sr_dist)
+null_cor
+## [1] -0.01474848
+That does look pretty flat for this randomized spatial location. We can develop a permutation test if we carry out this same procedure many times to develop a null distribution of correlation values. Then we can ask if our observed value of r = 0.37 is larger than we would expect simply due to random chance.
+
+Here we will demonstrate how to make make this on your own and how to carry it out using the vegan function mantel
+
+# carry out a permutation test for significance:
+nperm <- 999
+null_cor <- NULL
+# now we'll want to generate 999 random null estimates of r
+for (i in 1:nperm) {
+    # shuffle the rows of the spatial coordinates
+    null_xy <- mite.xy[sample(nrow(mite.xy)), ]
+    # correlation between the shuffled spatial coordinates and sr_dist
+    null_cor[i] <- cor(dist(null_xy), sr_dist)
+}
+
+# to get our 1000th possible outcome we'll consider that the observed
+# correlation value is a 'possibility' we should consider in the null distribution:
+null_cor <- c(null_cor, obs_cor)
+
+# compute the p-value which is simply the proportion of times we observed a
+# value equal to or greater than the observed correlation. We will learn that a
+# value equal to or as large as the observed value only occurs once out of the
+# 1000 possiblities considered so p = 0.001
+sum(null_cor >= obs_cor) / (nperm  + 1)
+## [1] 0.001
+# carry out the same analysis using the function mantel()
+?mantel
+sr_mantel <- mantel(xy_dist, sr_dist)
+sr_mantel
+## 
+## Mantel statistic based on Pearson's product-moment correlation 
+## 
+## Call:
+## mantel(xdis = xy_dist, ydis = sr_dist) 
+## 
+## Mantel statistic r: 0.3663 
+##       Significance: 0.001 
+## 
+## Upper quantiles of permutations (null model):
+##    90%    95%  97.5%    99% 
+## 0.0563 0.0726 0.0866 0.1017 
+## Permutation: free
+## Number of permutations: 999
+We can see that the estimated p-value is 0.001 (from both our hand made algorithm and the vegan::mantel function). This indicates that there is a statistically significant pattern of positive spatial autocorrelation which fits our intuitive interpretation we developed graphically.
+
+Now let's examine the distribution of null correlation values to better understand how the p-value was computed.
+
+# compare the two approaches graphically using stacked boxplots
+boxplot(list(null_cor, sr_mantel$perm), horizontal = F, boxwex = 0.5,
+        names = c('hand-made algo', 'vegan::mantel'), ylab='Correlation', 
+        ylim = range(null_cor))
+abline(h=obs_cor, col='red')
+abline(h=0, lty = 2, col = 'grey')
+
+
+As expected the null distribution is much closer to zero (grey dashed line) than the observed value at 0.37 (red solid line). Additionally, it is re-assuring to see that our hand-made algorithm and the vegan::mantel approaches are generating identical null distributions.
+
+Question
+
+What would a significant negative correlation indicate?
+
+[Show answer]
+This preliminary analysis suggests that there is a significant relationship between the spatial distance that two points are separated and the difference in species richness of the points.
+
+Let's take a similar approach but using a multivariate response variable in this case a site-by-species community matrix. It is difficult to visualize from a birds-eye view changes in a multivariate response variable because you would need to layer a different map for each column in the matrix. That still might not really provide you with a reduction of information that is useful for making an inference. Here we will first reduce the information in the response matrix using a non-metric multi-dimensional scaling ordination procedure. For simplicity of visualization we'll just map the 1st axis on to the spatial location of the samples.
+
+mite_mds <- metaMDS(mite)
+## Square root transformation
+## Wisconsin double standardization
+## Run 0 stress 0.1491323 
+## Run 1 stress 0.1594379 
+## Run 2 stress 0.1491485 
+## ... Procrustes: rmse 0.00167842  max resid 0.01091382 
+## Run 3 stress 0.1524423 
+## Run 4 stress 0.1549725 
+## Run 5 stress 0.1679278 
+## Run 6 stress 0.1625428 
+## Run 7 stress 0.164655 
+## Run 8 stress 0.1633671 
+## Run 9 stress 0.1491349 
+## ... Procrustes: rmse 0.0004959731  max resid 0.003505427 
+## ... Similar to previous best
+## Run 10 stress 0.166997 
+## Run 11 stress 0.1491325 
+## ... Procrustes: rmse 0.0004017483  max resid 0.002762366 
+## ... Similar to previous best
+## Run 12 stress 0.1668102 
+## Run 13 stress 0.1515072 
+## Run 14 stress 0.15828 
+## Run 15 stress 0.1582666 
+## Run 16 stress 0.1510135 
+## Run 17 stress 0.164894 
+## Run 18 stress 0.1683803 
+## Run 19 stress 0.1524404 
+## Run 20 stress 0.1679222 
+## *** Solution reached
+mds_axs1 <- mite_mds$points[ , 1]
+
+col_brks <- hist(mds_axs1, plot=F)$breaks
+col_indices <- as.numeric(cut(mds_axs1, col_brks))
+cols <- rev(terrain.colors(length(col_brks)))
+plot(mite.xy, cex=2, pch=19, col=cols[col_indices])
+
+
+As with richness there is a pretty clear spatial pattern from south to north. In this case though it appears that the signal is even stronger than in the species richness example as clear bands appear.
+
+Let's now undertake a more quantitative approach and estimate the degree of autocorrelation.
+
+## compute bray curtis distance for the community matrix
+## note when working with species-richness we just used Euclidean distance
+comm_dist <- vegdist(mite)
+plot(xy_dist, comm_dist)
+abline(lm(comm_dist ~ xy_dist), lwd=3, col='red')
+lines(lowess(xy_dist, comm_dist), lwd=3, col='pink')
+lines(lowess(xy_dist, comm_dist, f=0.1), lwd=3, col='blue')
+
+abline(v = max_dist, col='red', lwd=3, lty=2)
+
+
+comm_mantel <- mantel(xy_dist, comm_dist)
+comm_mantel
+## 
+## Mantel statistic based on Pearson's product-moment correlation 
+## 
+## Call:
+## mantel(xdis = xy_dist, ydis = comm_dist) 
+## 
+## Mantel statistic r: 0.4589 
+##       Significance: 0.001 
+## 
+## Upper quantiles of permutations (null model):
+##    90%    95%  97.5%    99% 
+## 0.0551 0.0753 0.0848 0.0973 
+## Permutation: free
+## Number of permutations: 999
+Species composition also appears to display positive spatial auto-correlation and it is a little stronger than species richness.
+
+The previous plots included both the linear regression model which is what the mantel analysis is based upon and the lowess smoother line. The smoother can help to identify if the relationship is non-linear and how the strength of the relationship varies with spatial distance.
+
+Note that the estimated correlation coefficients that we have been using as our test statistic use all of the distance classes including distances that are greater than 1/2 the max distance which we noted above is generally frowned upon. Notice in the above plot for comm_dist that the slope of the lowess lines is steeper than the linear regression line - this indicates a signal of spatial dependence or a non-linear change in the degree of spatial autocorrelation as a function of distance
+
+To develop a more nuanced understanding of the pattern of spatial autocorrelation we can bin distances into bins and then compute r at each distance class to build a correlogram.
+
+sr_corlog = mantel.correlog(sr_dist, xy_dist)
+comm_corlog = mantel.correlog(comm_dist, xy_dist)
+sr_corlog
+## 
+## Mantel Correlogram Analysis
+## 
+## Call:
+##  
+## mantel.correlog(D.eco = sr_dist, D.geo = xy_dist) 
+## 
+##         class.index     n.dist Mantel.cor Pr(Mantel) Pr(corrected)    
+## D.cl.1     0.514182 358.000000   0.102654      0.001         0.001 ***
+## D.cl.2     1.242546 650.000000   0.135647      0.001         0.002 ** 
+## D.cl.3     1.970910 796.000000   0.139241      0.001         0.003 ** 
+## D.cl.4     2.699274 696.000000   0.077577      0.001         0.004 ** 
+## D.cl.5     3.427638 500.000000   0.032271      0.070         0.070 .  
+## D.cl.6     4.156002 468.000000  -0.043035      0.020         0.040 *  
+## D.cl.7     4.884366 364.000000  -0.055028      0.004         0.012 *  
+## D.cl.8     5.612730 326.000000         NA         NA            NA    
+## D.cl.9     6.341094 260.000000         NA         NA            NA    
+## D.cl.10    7.069458 184.000000         NA         NA            NA    
+## D.cl.11    7.797822 130.000000         NA         NA            NA    
+## D.cl.12    8.526186  66.000000         NA         NA            NA    
+## D.cl.13    9.254550  32.000000         NA         NA            NA    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+comm_corlog
+## 
+## Mantel Correlogram Analysis
+## 
+## Call:
+##  
+## mantel.correlog(D.eco = comm_dist, D.geo = xy_dist) 
+## 
+##         class.index     n.dist Mantel.cor Pr(Mantel) Pr(corrected)    
+## D.cl.1     0.514182 358.000000   0.216312      0.001         0.001 ***
+## D.cl.2     1.242546 650.000000   0.240594      0.001         0.002 ** 
+## D.cl.3     1.970910 796.000000   0.175418      0.001         0.003 ** 
+## D.cl.4     2.699274 696.000000   0.057967      0.007         0.007 ** 
+## D.cl.5     3.427638 500.000000  -0.045814      0.018         0.018 *  
+## D.cl.6     4.156002 468.000000  -0.139885      0.001         0.006 ** 
+## D.cl.7     4.884366 364.000000  -0.164148      0.001         0.007 ** 
+## D.cl.8     5.612730 326.000000         NA         NA            NA    
+## D.cl.9     6.341094 260.000000         NA         NA            NA    
+## D.cl.10    7.069458 184.000000         NA         NA            NA    
+## D.cl.11    7.797822 130.000000         NA         NA            NA    
+## D.cl.12    8.526186  66.000000         NA         NA            NA    
+## D.cl.13    9.254550  32.000000         NA         NA            NA    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+par(mfrow=c(1,2))
+plot(sr_corlog)
+mtext(side=3, 'Species Richness')
+abline(v = max_dist, col='red', lwd=3, lty=2)
+plot(comm_corlog)
+mtext(side=3, 'Community Composition')
+abline(v = max_dist, col='red', lwd=3, lty=2)
+
+
+Above we can see that samples close to one another are more similar while samples that are further apart are more different than expected due to chance. Note that for some of the intermediate distance classes species-richness does not differ from random expectation.
+
+Last point to make is that in this analysis rather than computing 1 p-value we have computed a p-value for each distance class. Therefore, this kind of analysis suffers from the problem of multiple comparisons in which the p-values are not adhering to expected type-I error. Therefore, a correction is applied to each successive test using by default the Holm correction. See the documentation for the vegan::manel_correlog function for more information.
+
+Univariate Modeling
+Spatial (and temporal) dependence is a potential problem for inferential statistics because of an assumption of independence of error. However, if sufficient data is available it is often possible to model the spatial component of error and thus "correct" for the lack of independence in a model's error.
+
+Crawley (2014) provides a straightforward description of these methods and a few examples. Pinheiro and Bates (2000) provide a more detailed discussion with more examples and they provide a useful table and figure that is helpful when deciding which error model to chose from:
+
+This is Table 5.2 from Pinheiro and Bates (2000) in which s is the spatial lag and rho is the correlation parameter. This is a subset of the models presented in Cressie (1993). table
+
+Graphically these models of spatial correlation can be visualized like this (Figure 5.9 of Pinheiro and Bates 2000): plots
+
+sr_dat = data.frame(sr, mite.env, mite.xy)
+
+sr_lm = gls(sr ~ SubsDens, data=sr_dat)
+
+plot(Variogram(sr_lm, form= ~ x + y))
+
+
+res = residuals(sr_lm)
+plot(dist(sr_dat[, c('x', 'y')]), dist(res))
+lines(lowess(dist(sr_dat[, c('x', 'y')]), dist(res)), col='red', lwd=2)
+abline(v = max_dist, col='red', lwd=3, lty=2)
+
+
+sr_exp = update(sr_lm, corr=corExp(form=~x + y))
+# examine fit of error model to the raw model residuals
+# note this function defaults to displaying pearson standardized residuals
+# resType='p' or resType='pearson'
+plot(Variogram(sr_exp, maxDist = max_dist))
+
+
+# that doesn't look so good because clearly the model does not fit the error 
+# very well, it appears that there is a nugget (i.e., non-zero y-intercept)
+# Let's examine the normalized residuals in which the residuals are 
+# devided by the estimate of the variance-covariance matrix. If the model
+# fits well these residuals should be normally distributed.
+plot(Variogram(sr_exp, resType='normalized', maxDist = max_dist))
+
+
+# we see a little bit of a trend in the residuals but not too bad
+# actually which is a bit surprising given the output of the raw residuals
+
+# let's look at the same model but with a nugget
+sr_exp_nug = update(sr_exp, corr=corExp(form=~x + y, nugget=T))
+plot(Variogram(sr_exp_nug, maxDist = max_dist))
+
+
+plot(Variogram(sr_exp_nug, resType='n', maxDist = max_dist))
+
+
+# those look like they provide a better fit to the data
+
+# let's examine the rational quadratic error model
+sr_rat_nug = update(sr_lm, corr=corRatio(form=~x + y, nugget=T))
+# examine fit of error model to model residuals
+plot(Variogram(sr_rat_nug, maxDist = max_dist))
+
+
+plot(Variogram(sr_rat_nug, resType='n', maxDist = max_dist))
+
+
+# this model seems to fit about as a good as the exponential with the nugget
+
+# let's compare the models
+anova(sr_lm, sr_exp, sr_exp_nug, sr_rat_nug, test=F)
+##            Model df      AIC      BIC    logLik
+## sr_lm          1  3 422.1378 428.7963 -208.0689
+## sr_exp         2  4 396.3691 405.2471 -194.1846
+## sr_exp_nug     3  5 380.1734 391.2709 -185.0867
+## sr_rat_nug     4  5 380.3153 391.4128 -185.1576
+# so it appears that the exponential and rational models with the nuggets
+# fit equally as well and much better than models without spatial error terms
+# and better than a model with a nugget set to zero.
+
+summary(sr_exp_nug)
+## Generalized least squares fit by REML
+##   Model: sr ~ SubsDens 
+##   Data: sr_dat 
+##        AIC      BIC    logLik
+##   380.1734 391.2709 -185.0867
+## 
+## Correlation Structure: Exponential spatial correlation
+##  Formula: ~x + y 
+##  Parameter estimate(s):
+##        range       nugget 
+## 1.186425e+06 2.743805e-06 
+## 
+## Coefficients:
+##                 Value Std.Error    t-value p-value
+## (Intercept) 18.881353 1707.5437  0.0110576  0.9912
+## SubsDens    -0.065564    0.0339 -1.9316068  0.0576
+## 
+##  Correlation: 
+##          (Intr)
+## SubsDens -0.001
+## 
+## Standardized residuals:
+##           Min            Q1           Med            Q3           Max 
+## -0.0059476961 -0.0025815484 -0.0006396135  0.0009969918  0.0049498341 
+## 
+## Residual standard error: 1707.549 
+## Degrees of freedom: 70 total; 68 residual
+summary(sr_rat_nug)
+## Generalized least squares fit by REML
+##   Model: sr ~ SubsDens 
+##   Data: sr_dat 
+##        AIC      BIC    logLik
+##   380.3153 391.4128 -185.1576
+## 
+## Correlation Structure: Rational quadratic spatial correlation
+##  Formula: ~x + y 
+##  Parameter estimate(s):
+##    range   nugget 
+## 4.171307 0.267800 
+## 
+## Coefficients:
+##                 Value Std.Error   t-value p-value
+## (Intercept) 18.288674  3.861352  4.736340  0.0000
+## SubsDens    -0.064731  0.033315 -1.943026  0.0562
+## 
+##  Correlation: 
+##          (Intr)
+## SubsDens -0.306
+## 
+## Standardized residuals:
+##         Min          Q1         Med          Q3         Max 
+## -1.65514692 -0.66062258 -0.09103254  0.39015364  1.55258416 
+## 
+## Residual standard error: 5.80652 
+## Degrees of freedom: 70 total; 68 residual
+Note that in the above model summaries both the regression coefficients and the associated t-statistics were shifted towards greater importance. In general, it is thought that beta coefficients should be fairly robust to spatial dependence but that tests of significance will be highly sensitive.
+
+Let's now examine our spatial map of richness and this time focus on the residuals of our model. Do they still look spatially structured?
+
+col_brks = hist(residuals(sr_exp_nug), plot=F)$breaks
+col_indices = as.numeric(cut(residuals(sr_exp_nug), col_brks))
+cols = rev(terrain.colors(length(col_brks)))
+plot(mite.xy, cex=2, pch=19, col=cols[col_indices])
+
+
+It does appear that they do still look spatially structured at least at large distances, it is difficult to tell at short distances.
+
+Exercise: Include the variable WatrCont along with SubsDens in the linear model of richness. Go back through the spatial modeling routines. Does the map of the residuals still seem to show the strong pattern of non-stationary?
+
+Now let's examine spatial dependence in multivariate response such as species composition in a modeling framework
+
+mite_rda = rda(mite, mite.env[ , 1:2])
+
+plot(mite_rda, display=c('sp', 'bp'))
+
+
+anova(mite_rda)
+## Permutation test for rda under reduced model
+## Permutation: free
+## Number of permutations: 999
+## 
+## Model: rda(X = mite, Y = mite.env[, 1:2])
+##          Df Variance      F Pr(>F)   
+## Model     2   1977.8 9.3048  0.009 **
+## Residual 67   7120.8                 
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+mite_mso_raw = mso(rda(mite), mite.xy, permutations = 1000)
+mite_mso = mso(mite_rda, mite.xy, permutations = 1000)
+mite_mso
+## Call: mso(object.cca = mite_rda, object.xy = mite.xy, permutations =
+## 1000)
+## 
+##                 Inertia Proportion Rank
+## Total         9098.5913     1.0000     
+## Constrained   1977.8327     0.2174    2
+## Unconstrained 7120.7586     0.7826   35
+## Inertia is variance 
+## 
+## Eigenvalues for constrained axes:
+##   RDA1   RDA2 
+## 1919.3   58.6 
+## 
+## Eigenvalues for unconstrained axes:
+##  PC1  PC2  PC3  PC4  PC5  PC6  PC7  PC8 
+## 6252  289  153  112   92   57   41   30 
+## (Showing 8 of 35 unconstrained eigenvalues)
+## 
+## mso variogram:
+## 
+##     H   Dist   n    All    Sum     CA   CCA    se CA.signif
+## 0   0 0.3555  63  69.95  80.83  69.23 11.60 54.81  0.442557
+## 1   1 1.0659 393 105.29 108.30  91.67 16.63 27.79  0.638362
+## 2   2 2.0089 534  65.74  74.67  56.93 17.74 16.08  0.008991
+## 3   3 2.9786 417 127.66 127.36 100.78 26.58 27.10  0.930070
+## 4   4 3.9817 322 132.20 133.52 100.77 32.75 31.32  0.929071
+## 5   5 5.0204 245 141.72 148.28 105.64 42.64 39.07  0.902098
+## 10 10 6.8069 441 242.71 223.33 177.06 46.27 39.86  0.113886
+## 
+## Permutation: free
+## Number of permutations: 1000
+par(mfrow=c(1,1))
+msoplot(mite_mso_raw)
+
+
+msoplot(mite_mso)
+
+
+## Error variance of regression model underestimated by 11.3 percent
+Literature Cited
+Pinheiro, J, and D.M. Bates. 2000. Mixed-Effects Models in S and S-PLUS. Springer. New York, NY, USA.
+Crawley, M. 2014. The R Book, 2nd ed. Wiley, New York.
+Cressie, N.A.C. 1993. Statistics for Spatial Data, Wiley, New York.
