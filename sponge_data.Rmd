@@ -1,0 +1,210 @@
+---
+title: "Sponge data"
+author: "Hunt Jones"
+date: "3/11/2022"
+output: html_document
+---
+```{r}
+library(car)
+library(vegan)
+
+POMt0_dat <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/POMtzed_dat.csv")
+View(POMt0_dat)
+
+str(POMt0_dat)
+
+POMt0_dat$species <- as.factor(POMt0_dat$species)
+
+summary(aov(atmpct15N~species, data=POMt0_dat))
+
+```
+
+```{r}
+pom_xmut <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/pom_xmut_chase_enrichment.csv")
+View(pom_xmut)
+
+plot(ap15N~time, data=pom_xmut)
+```
+
+```{r}
+pom_acau <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/pom_acau_chase_enrichment.csv")
+View(pom_acau)
+
+plot(ap15N~time, data=pom_acau)
+acau_chase <- lm(ap15N~time, data=pom_acau)
+
+summary(acau_chase)
+
+```
+
+```{r}
+pom_ibir <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/pom_ibir_chase_enrichment.csv")
+View(pom_ibir)
+
+plot(ap15N~time, data=pom_ibir)
+ibir_chase <- lm(ap15N~time, data=pom_ibir)
+
+summary(ibir_chase)
+
+```
+
+
+
+
+
+```{r}
+pom <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/pom_experiment.csv")
+
+pom$species <- as.factor(pom$species)
+
+summary(aov(ap15N~time:species, data=pom))
+
+library(dplyr)
+
+mean_pom <- data.frame(pom%>%
+  group_by(time,species)%>%
+  summarise(mean_N_enrichment=mean(ap15N),se=n_distinct(replicate),std_dev=(sd(ap15N))))
+              
+
+
+plot(mean_N_enrichment ~ time, data = mean_pom, type = 'n', 
+     xlab = 'Time (hrs)', ylab = 'Atm % 15N')
+points(mean_N_enrichment ~ time, data = mean_pom, subset = species == "acau",
+       pch = 1, col = 'red')
+lines(lowess(mean_pom$time[mean_pom$species == 'acau'],
+             mean_pom$mean_N_enrichment[mean_pom$species == 'acau']),
+      lty = 2, col = 'red')
+points(mean_N_enrichment ~ time, data = mean_pom, subset = species == "ibir",
+       pch = 1, col = 'blue')
+lines(lowess(mean_pom$time[mean_pom$species == 'ibir'],
+             mean_pom$mean_N_enrichment[mean_pom$species == 'ibir']),
+      lty = 2, col = 'blue')
+points(mean_N_enrichment ~ time, data = mean_pom, subset = species == "ndig",
+       pch = 1, col = 'green')
+lines(lowess(mean_pom$time[mean_pom$species == 'ndig'],
+             mean_pom$mean_N_enrichment[mean_pom$species == 'ndig']),
+      lty = 2, col = 'green')
+points(mean_N_enrichment ~ time, data = mean_pom, subset = species == "xmut",
+       pch = 1, col = 'black')
+lines(lowess(mean_pom$time[mean_pom$species == 'xmut'],
+             mean_pom$mean_N_enrichment[mean_pom$species == 'xmut']),
+      lty = 2, col = 'black')
+
+
+  
+ggplot(data = mean_pom, mapping = aes(x = time, y = mean_N_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_pom,
+    aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+```
+
+```{r}
+
+dom <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/dom_experiment.csv")
+
+
+dom$species <- as.factor(dom$species)
+
+summary(aov(ap15N~time+species, data=dom))
+
+library(dplyr)
+
+mean_dom <- data.frame(dom%>%
+  group_by(time,species)%>%
+  summarise(mean_N_enrichment=mean(ap15N),se=n_distinct(replicate),std_dev=(sd(ap15N))))
+         
+
+plot(mean_N_enrichment ~ time, data = mean_dom, type = 'n', 
+     xlab = 'Time (hrs)', ylab = 'Atm % 15N')
+points(mean_N_enrichment ~ time, data = mean_dom, subset = species == "acau",
+       pch = 1, col = 'red')
+lines(lowess(mean_dom$time[mean_dom$species == 'acau'],
+             mean_dom$mean_N_enrichment[mean_dom$species == 'acau']),
+      lty = 2, col = 'red')
+points(mean_N_enrichment ~ time, data = mean_dom, subset = species == "ibir",
+       pch = 1, col = 'blue')
+lines(lowess(mean_dom$time[mean_dom$species == 'ibir'],
+             mean_dom$mean_N_enrichment[mean_dom$species == 'ibir']),
+      lty = 2, col = 'blue')
+points(mean_N_enrichment ~ time, data = mean_dom, subset = species == "ndig",
+       pch = 1, col = 'green')
+lines(lowess(mean_dom$time[mean_dom$species == 'ndig'],
+             mean_dom$mean_N_enrichment[mean_dom$species == 'ndig']),
+      lty = 2, col = 'green')
+points(mean_N_enrichment ~ time, data = mean_dom, subset = species == "xmut",
+       pch = 1, col = 'black')
+lines(lowess(mean_dom$time[mean_dom$species == 'xmut'],
+             mean_dom$mean_N_enrichment[mean_dom$species == 'xmut']),
+      lty = 2, col = 'black')
+
+
+ggplot(data = mean_dom, mapping = aes(x = time, y = mean_N_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_dom,
+    aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+
+```
+
+```{r}
+al <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/al_experiment.csv")
+
+
+al$species <- as.factor(al$species)
+
+summary(aov(ap15N~time:species, data=al))
+
+library(dplyr)
+
+mean_al <- data.frame(al%>%
+  group_by(time,species)%>%
+  summarise(mean_N_enrichment=mean(ap15N),se=n_distinct(replicate),std_dev=(sd(ap15N))))
+         
+
+plot(mean_N_enrichment ~ time, data = mean_al, type = 'n', 
+     xlab = 'Time (hrs)', ylab = 'Atm % 15N')
+points(mean_N_enrichment ~ time, data = mean_al, subset = species == "acau",
+       pch = 1, col = 'red')
+lines(lowess(mean_al$time[mean_al$species == 'acau'],
+             mean_al$mean_N_enrichment[mean_al$species == 'acau']),
+      lty = 2, col = 'red')
+points(mean_N_enrichment ~ time, data = mean_al, subset = species == "ibir",
+       pch = 1, col = 'blue')
+lines(lowess(mean_al$time[mean_al$species == 'ibir'],
+             mean_al$mean_N_enrichment[mean_al$species == 'ibir']),
+      lty = 2, col = 'blue')
+points(mean_N_enrichment ~ time, data = mean_al, subset = species == "ndig",
+       pch = 1, col = 'green')
+lines(lowess(mean_al$time[mean_al$species == 'ndig'],
+             mean_al$mean_N_enrichment[mean_al$species == 'ndig']),
+      lty = 2, col = 'green')
+points(mean_N_enrichment ~ time, data = mean_al, subset = species == "xmut",
+       pch = 1, col = 'black')
+lines(lowess(mean_al$time[mean_al$species == 'xmut'],
+             mean_al$mean_N_enrichment[mean_al$species == 'xmut']),
+      lty = 2, col = 'black')
+
+
+ggplot(data = mean_al, mapping = aes(x = time, y = mean_N_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_al,
+    aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+
+
+
+```
+
+
+
+
