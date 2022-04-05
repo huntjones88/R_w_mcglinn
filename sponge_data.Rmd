@@ -7,6 +7,13 @@ output: html_document
 ```{r}
 library(car)
 library(vegan)
+library(dplyr)
+library(MASS)
+library(ggplot2)
+library(writexl)
+```
+
+```{r}
 
 POMt0_dat <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/POMtzed_dat.csv")
 View(POMt0_dat)
@@ -56,8 +63,14 @@ summary(ibir_chase)
 pom <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/pom_experiment.csv")
 
 pom$species <- as.factor(pom$species)
+pom$time <- as.factor(pom$time)
 
-summary(aov(ap15N~time:species, data=pom))
+pom_rates <- aov(ap15N~time+species, data=pom)
+
+summary(pom_rates)
+
+summary(pom_rates_aov)
+TukeyHSD(pom_rates)
 
 library(dplyr)
 
@@ -100,6 +113,30 @@ ggplot(data = mean_pom, mapping = aes(x = time, y = mean_N_enrichment)) +
     aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
       width = 0.4) +
   theme_classic()
+
+summary(aov(ap13C~time:species, data=pom))
+
+View(pom)
+
+mean_pom_C <- data.frame(pom%>%
+  group_by(time,species)%>%
+  summarise(mean_C_enrichment=mean(ap13C),se=n_distinct(replicate),std_dev=(sd(ap13C))))
+         
+mean_pom_C$time <- as.numeric(mean_pom_C$time)
+
+pom_C_plot <- ggplot(data = mean_pom_C, mapping = aes(x = time, y = mean_C_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_pom_C,
+    aes(time, mean_C_enrichment, ymin = mean_C_enrichment - (std_dev/(se^1/2)), ymax = mean_C_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+
+
+class(mean_pom_C$species)
+
+pom_C_plot 
 ```
 
 ```{r}
@@ -107,9 +144,11 @@ ggplot(data = mean_pom, mapping = aes(x = time, y = mean_N_enrichment)) +
 dom <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/dom_experiment.csv")
 
 
-dom$species <- as.factor(dom$species)
 
-summary(aov(ap15N~time+species, data=dom))
+
+
+par(mfrow=c(2,2))
+plot(dom_test)
 
 library(dplyr)
 
@@ -149,7 +188,39 @@ ggplot(data = mean_dom, mapping = aes(x = time, y = mean_N_enrichment)) +
   geom_errorbar(data = mean_dom,
     aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
       width = 0.4) +
+  geom_vline(xintercept=1.5,lwd=10,col=rgb(red=116,green=12,blue=14,alpha=142,maxColorValue=255))+
   theme_classic()
+
+summary(aov(ap13C~time:species, data=dom))
+
+
+mean_dom_C <- data.frame(dom%>%
+  group_by(time,species)%>%
+  summarise(mean_C_enrichment=mean(ap13C),se=n_distinct(replicate),std_dev=(sd(ap13C))))
+         
+
+
+```
+
+```{r}
+ggplot(data = mean_dom_C, mapping = aes(x = time, y = mean_C_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green4", "black")) +
+  geom_errorbar(data = mean_dom_C,
+    aes(time, mean_C_enrichment, ymin = mean_C_enrichment - (std_dev/(se^1/2)), ymax = mean_C_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  labs(
+    tag = "Figure 1",
+    x = "Time (hrs)",
+    y = "Atom % 13C",
+  ) +
+  theme_classic()
+
+
+
+# function = polygon for shading
+
 
 ```
 
@@ -203,8 +274,123 @@ ggplot(data = mean_al, mapping = aes(x = time, y = mean_N_enrichment)) +
 
 
 
+summary(aov(ap13C~time:species, data=al))
+
+
+mean_al_C <- data.frame(al%>%
+  group_by(time,species)%>%
+  summarise(mean_C_enrichment=mean(ap13C),se=n_distinct(replicate),std_dev=(sd(ap13C))))
+         
+
+rgb(190,190,190,alpha=.5)
+
+ggplot(data = mean_al_C, mapping = aes(x = time, y = mean_C_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_al_C,
+    aes(time, mean_C_enrichment, ymin = mean_C_enrichment - (std_dev/(se^1/2)), ymax = mean_C_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  geom_vline(xintercept=1.5,lwd=10,col=rgb(red=116,green=12,blue=14,alpha=142,maxColorValue=255))+
+  theme_classic()
+
+
+
+
+```
+
+```{r}
+ad <- read.csv("~/Downloads/Thesis Stuff/Bulk Enrichment Data/Analyzed SI data/ad_experiment.csv")
+
+
+ad$species <- as.factor(ad$species)
+
+summary(aov(ap15N~time:species, data=ad))
+
+library(dplyr)
+
+mean_ad <- data.frame(ad%>%
+  group_by(time,species)%>%
+  summarise(mean_N_enrichment=mean(ap15N),se=n_distinct(replicate),std_dev=(sd(ap15N))))
+         
+
+
+
+
+ggplot(data = mean_ad, mapping = aes(x = time, y = mean_N_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_ad,
+    aes(time, mean_N_enrichment, ymin = mean_N_enrichment - (std_dev/(se^1/2)), ymax = mean_N_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+
+
+summary(aov(ap13C~time:species, data=ad))
+
+library(dplyr)
+
+mean_ad_C <- data.frame(ad%>%
+  group_by(time,species)%>%
+  summarise(mean_C_enrichment=mean(ap13C),se=n_distinct(replicate),std_dev=(sd(ap13C))))
+         
+
+
+
+ggplot(data = mean_ad_C, mapping = aes(x = time, y = mean_C_enrichment)) + 
+  geom_point(mapping = aes(color = species)) +
+  geom_line(mapping = aes(linetype = species, color = species)) +
+  scale_color_manual(values = c("red", "blue", "green", "black")) +
+  geom_errorbar(data = mean_ad_C,
+    aes(time, mean_C_enrichment, ymin = mean_C_enrichment - (std_dev/(se^1/2)), ymax = mean_C_enrichment + (std_dev/(se^1/2))),
+      width = 0.4) +
+  theme_classic()
+
+
+
+
+
+
+```
+
+```{r}
+ad$species <- as.factor(ad$species)
+ad$time <- as.factor(ad$time)
+
+ad_acau <- filter(ad, species=="acau")
+
+
+
+ad_dist <- vegdist(ad_acau$ap15N, method="euclidean")
+
+ad_acau_test <- (adonis2(ad_dist~time, data=ad_acau, permutations=999, na.rm=T))
+
+ad_acau_test
+
+library(devtools)
+library(pairwiseAdonis)
+pair.mod <- pairwise.adonis2(ad_dist ~ time, data=ad_acau)
+pair.mod
+
+
 ```
 
 
+```{r}
+pom$species <- as.factor(pom$species)
+pom$time <- as.factor(pom$time)
 
+pom_testC <- (aov(ap13C~time*species, data=pom))
+
+
+TukeyHSD(pom_testC)
+
+
+
+```
+```{r}
+write_xlsx(ad, path="~/Downloads/hunt_ad_data.xlsx")
+
+```
 

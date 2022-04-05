@@ -1,0 +1,220 @@
+---
+title: "sponge_data_analysis"
+author: "Hunt Jones"
+date: "3/23/2022"
+output: html_document
+---
+
+```{r}
+library(car)
+library(vegan)
+library(dplyr)
+library(MASS)
+library(ggplot2)
+library(writexl)
+library(ggpubr)
+library(tidyverse)
+library(broom)
+library(AICcmodavg)
+library(FSA)
+```
+
+```{r}
+pom_0 <- filter(pom, time == 0.0)
+
+pom_3 <- filter(pom, time == 3)
+
+pom_05 <- filter(pom, time == 0.5)
+
+pom_75 <- filter(pom, time == 75)
+
+pom_simple <- rbind(pom_0,pom_05,pom_75)
+
+pom_simple$time <- as.factor(pom_simple$time)
+
+pom_acau <- filter(pom, species == "acau")
+
+pom_ibir <- filter(pom_simple, species == "ibir")
+
+pom_ndig <- filter(pom_simple, species == "ndig")
+
+pom_xmut <- filter(pom_simple, species == "xmut")
+
+pom_simple_aov <- aov(ap15N~time+species, data=pom_simple)
+
+summary(pom_simple_aov)
+
+TukeyHSD(pom_simple_aov)
+
+pom_acau_aov <- kruskal.test(ap15N~time, data = pom_acau)
+
+pom_ibir_aov <- kruskal.test(lcd15N~time, data= pom_ibir)
+
+pom_ndig_aov <- kruskal.test(ap15N~time, data = pom_ndig)
+
+pom_xmut_aov <- kruskal.test(ap15N~time, data = pom_xmut)
+
+
+pom_acau_aov
+dunnTest(ap15N~time, data = pom_acau)
+
+pom_ibir_aov
+dunnTest(ap15N~time, data = pom_ibir)
+
+pom_ndig_aov
+dunnTest(ap15N~time, data = pom_ndig)
+
+pom_xmut_aov
+dunnTest(ap15N~time, data = pom_xmut)
+
+
+
+```
+
+```{r}
+
+pom_acau_aovC <- kruskal.test(ap13C~time, data = pom_acau)
+
+pom_ibir_aovC <- kruskal.test(lcd13C~time, data= pom_ibir)
+
+pom_ndig_aovC <- kruskal.test(ap13C~time, data = pom_ndig)
+
+pom_xmut_aovC <- kruskal.test(ap13C~time, data = pom_xmut)
+
+
+pom_acau_aovC
+dunnTest(ap13C~time, data = pom_acau)
+
+pom_ibir_aovC
+dunnTest(ap13C~time, data = pom_ibir)
+
+pom_ndig_aovC
+dunnTest(ap13C~time, data = pom_ndig)
+
+pom_xmut_aovC
+dunnTest(ap13C~time, data = pom_xmut)
+
+
+
+```
+
+
+```{r}
+dom_0 <- filter(dom, time == 0.0)
+
+dom_3 <- filter(dom, time == 3)
+
+dom_05 <- filter(dom, time == 0.5)
+
+dom_75 <- filter(dom, time == 75)
+
+dom_simple <- rbind(dom_0,dom_05,dom_75)
+
+dom_simple$time <- as.factor(dom_simple$time)
+
+View(dom_simple)
+
+dom_acau <- filter(dom_simple, species == "acau")
+
+dom_ibir <- filter(dom_simple, species == "ibir")
+
+dom_ndig <- filter(dom_simple, species == "ndig")
+
+dom_xmut <- filter(dom_simple, species == "xmut")
+
+
+dom_acau_aov <- kruskal.test(ap15N~time, data = dom_acau)
+
+dom_ibir_aov <- kruskal.test(ap15N~time, data= dom_ibir)
+
+dom_ndig_aov <- kruskal.test(ap15N~time, data = dom_ndig)
+
+dom_xmut_aov <- kruskal.test(ap15N~time, data = dom_xmut)
+
+dom_acau_aov
+dunnTest(ap15N~time, data = dom_acau)
+
+dom_ibir_aov
+dunnTest(ap15N~time, data = dom_ibir)
+
+dom_ndig_aov
+dunnTest(ap15N~time, data = dom_ndig)
+
+dom_xmut_aov
+dunnTest(ap15N~time, data=dom_xmut)
+
+dunnTest(ap15N~time, data = dom_ibir)
+
+
+dunnTest(ap13C~time, data = dom_ibir)
+
+
+
+dunnTest(ap15N~time, data = dom_xmut)
+
+
+dunnTest(ap13C~time, data=dom_xmut)
+
+
+```
+
+
+
+```{r}
+al0 <- filter(al, time == 0.0)
+
+al3 <- filter(dom, time == 3)
+
+al05 <- filter(dom, time == 0.5)
+
+al75 <- filter(dom, time == 75)
+
+alsimple <- rbind(al0,al05,al75)
+
+alsimple$time <- as.factor(alsimple$time)
+
+al_acau <- filter(alsimple, species == "acau")
+
+al_ibir <- filter(alsimple, species == "ibir")
+
+al_ndig <- filter(alsimple, species == "ndig")
+
+al_xmut <- filter(alsimple, species == "xmut")
+
+
+al_acau_aov <- kruskal.test(ap15N~time, data = al_acau)
+
+al_ibir_aov <- kruskal.test(ap15N~time, data= al_ibir)
+
+al_ndig_aov <- kruskal.test(ap15N~time, data = al_ndig)
+
+al_xmut_aov <- kruskal.test(ap15N~time, data = al_xmut)
+
+
+dunnTest(ap15N~time, data = al_acau)
+
+
+dunnTest(ap15N~time, data = al_ibir)
+
+dunnTest(ap15N~time, data = al_ndig)
+
+dunnTest(ap15N~time, data=al_xmut)
+
+dunnTest(ap13C~time, data = al_acau)
+
+
+dunnTest(ap13C~time, data = al_ibir)
+
+
+
+dunnTest(ap13C~time, data = al_ndig)
+
+
+dunnTest(ap13C~time, data=al_xmut)
+
+```
+
+
+
+
+
